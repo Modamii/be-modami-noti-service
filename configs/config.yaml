@@ -1,0 +1,36 @@
+# Notification service configuration (Viper)
+
+app:
+  name: "notification-service"
+  environment: "development"
+  debug: true
+
+database:
+  mongodb:
+    uri: "mongodb://localhost:27017"
+    database: "notifications"
+
+cache:
+  redis:
+    addr: "localhost:6379"
+    password: ""
+    db: 0
+
+kafka:
+  brokers:
+    - "localhost:9092"
+  consumer_group_id: "notification-service-group"
+  notification_topic: "notification.events"
+
+queue:
+  ws_key: "notif:ws"
+  push_key: "notif:push"
+  pubsub_ws_channel: "notif:ws:dispatch"
+
+servers:
+  api_addr: ":8080"
+  ws_gateway_addr: ":8081"
+  ingest_addr: ":8082"
+
+fcm:
+  credentials_path: ""
