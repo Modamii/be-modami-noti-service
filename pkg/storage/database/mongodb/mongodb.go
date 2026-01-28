@@ -34,6 +34,7 @@ func NewMongoLogSink(ctx context.Context) *MongoLogSink {
 }
 
 func (m *MongoLogSink) Info(level int, message string, keysAndValues ...interface{}) {}
+
 func (m *MongoLogSink) Error(err error, message string, keysAndValues ...interface{}) {}
 
 func NewMongoDB(config MongoConfig) (*MongoDB, error) {
