@@ -2,9 +2,8 @@ package database
 
 import (
 	"context"
+	"log/slog"
 	"time"
-
-	"gitlab.com/services5732151/pkg-logging/logger"
 
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -25,21 +24,13 @@ type MongoDB struct {
 	Database *mongo.Database
 }
 
-type MongoLogSink struct {
-	ctx context.Context
-}
-
-func NewMongoLogSink(ctx context.Context) *MongoLogSink {
-	return &MongoLogSink{ctx: ctx}
-}
+type MongoLogSink struct{}
 
 func (m *MongoLogSink) Info(level int, message string, keysAndValues ...interface{}) {}
-
 func (m *MongoLogSink) Error(err error, message string, keysAndValues ...interface{}) {}
 
 func NewMongoDB(config MongoConfig) (*MongoDB, error) {
 	ctx := context.Background()
-	l := logger.FromContext(ctx)
 
 	if config.Timeout == 0 {
 		config.Timeout = 30 * time.Second
@@ -50,17 +41,19 @@ func NewMongoDB(config MongoConfig) (*MongoDB, error) {
 	if config.MinPool == 0 {
 		config.MinPool = 10
 	}
+
 	var loggerOpts *options.LoggerOptions
 	if config.EnableLogging {
 		loggerOpts = &options.LoggerOptions{
 			ComponentLevels: map[options.LogComponent]options.LogLevel{},
-			Sink:           NewMongoLogSink(ctx),
+			Sink:            &MongoLogSink{},
 		}
 	} else {
 		loggerOpts = &options.LoggerOptions{
 			ComponentLevels: map[options.LogComponent]options.LogLevel{},
 		}
 	}
+
 	clientOpts := options.Client().
 		ApplyURI(config.URI).
 		SetMaxPoolSize(config.MaxPool).
@@ -68,18 +61,20 @@ func NewMongoDB(config MongoConfig) (*MongoDB, error) {
 		SetMaxConnIdleTime(5 * time.Minute).
 		SetServerSelectionTimeout(config.Timeout).
 		SetLoggerOptions(loggerOpts)
+
 	connectCtx, cancel := context.WithTimeout(ctx, config.Timeout)
 	defer cancel()
+
 	client, err := mongo.Connect(connectCtx, clientOpts)
 	if err != nil {
-		l.Error("Failed to connect to MongoDB", err)
+		slog.Error("failed to connect to MongoDB", "error", err)
 		return nil, err
 	}
 	if err := client.Ping(connectCtx, readpref.Primary()); err != nil {
-		l.Error("Failed to ping MongoDB", err)
+		slog.Error("failed to ping MongoDB", "error", err)
 		return nil, err
 	}
-	l.Info("Successfully connected to MongoDB")
+	slog.Info("connected to MongoDB")
 	return &MongoDB{
 		Client:   client,
 		Database: client.Database(config.Database),
@@ -87,12 +82,11 @@ func NewMongoDB(config MongoConfig) (*MongoDB, error) {
 }
 
 func (m *MongoDB) Close(ctx context.Context) error {
-	l := logger.FromContext(ctx)
 	if err := m.Client.Disconnect(ctx); err != nil {
-		l.Error("Failed to disconnect from MongoDB", err)
+		slog.Error("failed to disconnect from MongoDB", "error", err)
 		return err
 	}
-	l.Info("Disconnected from MongoDB")
+	slog.Info("disconnected from MongoDB")
 	return nil
 }
 
@@ -102,26 +96,4 @@ func (m *MongoDB) Ping(ctx context.Context) error {
 
 func (m *MongoDB) GetCollection(name string) *mongo.Collection {
 	return m.Database.Collection(name)
-}
-
-func (m *MongoDB) CreateIndexes(ctx context.Context) error {
-	accountCollection := m.GetCollection("accounts")
-	accountIndexes := []mongo.IndexModel{
-		{
-			Keys:    map[string]int{"email": 1},
-			Options: options.Index().SetUnique(true),
-		},
-		{
-			Keys:    map[string]int{"username": 1},
-			Options: options.Index().SetUnique(true),
-		},
-	}
-	l := logger.FromContext(ctx)
-	_, err := accountCollection.Indexes().CreateMany(ctx, accountIndexes)
-	if err != nil {
-		l.Error("Failed to create account indexes", err)
-		return err
-	}
-	l.Info("Successfully created MongoDB indexes")
-	return nil
 }

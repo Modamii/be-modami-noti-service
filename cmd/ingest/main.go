@@ -1,40 +1,81 @@
-// Ingest: Kafka consumer (or HTTP webhook). Parse NotificationEvent, dispatch by Identity.
-// Copy your Kafka consumer from config/kafka and wire RunConsumer here.
+// Ingest: Kafka consumer + HTTP webhook. Parse NotificationEvent, dispatch by Identity.
 package main
 
 import (
 	"context"
-	"log"
+	"encoding/json"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/techinsight/be-techinsights-notification-service/configs"
 	"github.com/techinsight/be-techinsights-notification-service/internal/handlers"
 	"github.com/techinsight/be-techinsights-notification-service/internal/queue"
 	"github.com/techinsight/be-techinsights-notification-service/pkg/contract"
+	"github.com/techinsight/be-techinsights-notification-service/pkg/health"
+	"github.com/techinsight/be-techinsights-notification-service/pkg/kafka"
+	"github.com/techinsight/be-techinsights-notification-service/pkg/logging"
 )
 
 func main() {
 	cfg, err := configs.Load()
 	if err != nil {
-		log.Fatalf("config: %v", err)
+		slog.Error("failed to load config", "error", err)
+		os.Exit(1)
 	}
+	logging.Setup(cfg.App.Debug)
+
 	rdb := redis.NewClient(configs.RedisOptions(cfg))
 	if err := rdb.Ping(context.Background()).Err(); err != nil {
-		log.Fatalf("redis ping: %v", err)
+		slog.Error("redis ping failed", "error", err)
+		os.Exit(1)
 	}
+	defer rdb.Close()
+
 	q := queue.New(rdb)
 	reg := NewRegistryWithHandlers(q, cfg.Queue.WSKey, cfg.Queue.PushKey)
 
-	// HTTP webhook for testing (contract envelope)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	// Kafka consumer
+	if len(cfg.Kafka.Brokers) > 0 && cfg.Kafka.Brokers[0] != "" {
+		go func() {
+			slog.Info("starting kafka consumer", "topic", cfg.Kafka.NotificationTopic)
+			err := kafka.RunConsumer(ctx, cfg.Kafka.Brokers, cfg.Kafka.ConsumerGroupID, cfg.Kafka.NotificationTopic,
+				func(ctx context.Context, key, value []byte) error {
+					var e contract.NotificationEvent
+					if err := json.Unmarshal(value, &e); err != nil {
+						slog.Warn("kafka: unmarshal event failed", "error", err)
+						return nil
+					}
+					h, ok := reg.Get(e.Identity)
+					if !ok {
+						slog.Debug("kafka: no handler for identity", "identity", e.Identity)
+						return nil
+					}
+					return h(ctx, &e)
+				},
+			)
+			if err != nil && err != context.Canceled {
+				slog.Error("kafka consumer exited", "error", err)
+			}
+		}()
+	}
+
+	// HTTP webhook
 	mux := http.NewServeMux()
-	mux.HandleFunc("/webhook", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
+
+	// Health endpoints
+	checker := health.NewHandler(health.NewRedisChecker(rdb))
+	mux.HandleFunc("GET /healthz", checker.Healthz)
+	mux.HandleFunc("GET /readyz", checker.Readyz)
+
+	mux.HandleFunc("POST /webhook", func(w http.ResponseWriter, r *http.Request) {
 		var e contract.NotificationEvent
 		if err := decodeJSON(r.Body, &e); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -46,6 +87,7 @@ func main() {
 			return
 		}
 		if err := h(r.Context(), &e); err != nil {
+			slog.Error("webhook handler error", "identity", e.Identity, "error", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -54,24 +96,17 @@ func main() {
 
 	srv := &http.Server{Addr: cfg.Servers.IngestAddr, Handler: mux}
 	go func() {
-		log.Printf("ingest listening on %s", cfg.Servers.IngestAddr)
+		slog.Info("ingest listening", "addr", cfg.Servers.IngestAddr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatal(err)
+			slog.Error("server error", "error", err)
 		}
 	}()
 
-	// TODO: start Kafka consumer from config/kafka here, e.g.:
-	// go kafka.RunConsumer(ctx, brokers, topic, func(msg []byte) error {
-	//   var e contract.NotificationEvent
-	//   if err := json.Unmarshal(msg, &e); err != nil { return err }
-	//   h, ok := reg.Get(e.Identity); if !ok { return nil }
-	//   return h(ctx, &e)
-	// })
-
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	<-ctx.Done()
-	stop()
-	_ = srv.Shutdown(context.Background())
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_ = srv.Shutdown(shutdownCtx)
+	slog.Info("ingest stopped")
 }
 
 func NewRegistryWithHandlers(q *queue.Queue, queueWS, queuePush string) handlers.Registry {

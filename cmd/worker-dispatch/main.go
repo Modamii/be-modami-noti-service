@@ -1,4 +1,4 @@
-// Worker Push: BRPOP notif:push → FCM/Web Push. Stub: log payload; wire FCM later.
+// Worker Dispatch: BRPOP notif:ws → publish to Centrifugo via HTTP API.
 package main
 
 import (
@@ -14,6 +14,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/techinsight/be-techinsights-notification-service/configs"
 	"github.com/techinsight/be-techinsights-notification-service/internal/queue"
+	"github.com/techinsight/be-techinsights-notification-service/pkg/centrifugo"
 	"github.com/techinsight/be-techinsights-notification-service/pkg/event"
 	"github.com/techinsight/be-techinsights-notification-service/pkg/health"
 	"github.com/techinsight/be-techinsights-notification-service/pkg/logging"
@@ -35,13 +36,17 @@ func main() {
 	defer rdb.Close()
 
 	q := queue.New(rdb)
+	cfgo := centrifugo.NewClient(cfg.Centrifugo.APIURL, cfg.Centrifugo.APIKey)
 
 	// Health endpoint for Kubernetes probes
-	checker := health.NewHandler(health.NewRedisChecker(rdb))
+	checker := health.NewHandler(
+		health.NewRedisChecker(rdb),
+		health.NewCentrifugoChecker(cfgo),
+	)
 	healthMux := http.NewServeMux()
 	healthMux.HandleFunc("GET /healthz", checker.Healthz)
 	healthMux.HandleFunc("GET /readyz", checker.Readyz)
-	healthSrv := &http.Server{Addr: ":9091", Handler: healthMux}
+	healthSrv := &http.Server{Addr: ":9090", Handler: healthMux}
 	go func() {
 		if err := healthSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("health server error", "error", err)
@@ -51,16 +56,26 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	slog.Info("worker-push started", "queue", cfg.Queue.PushKey)
+	slog.Info("worker-dispatch started", "queue", cfg.Queue.WSKey)
 
-	err = q.Consume(ctx, cfg.Queue.PushKey, 5*time.Second, func(b []byte) error {
-		var msg event.PushMessage
+	err = q.Consume(ctx, cfg.Queue.WSKey, 5*time.Second, func(b []byte) error {
+		var msg event.WSMessage
 		if err := json.Unmarshal(b, &msg); err != nil {
-			slog.Warn("unmarshal PushMessage failed", "error", err)
-			return nil
+			slog.Warn("unmarshal WSMessage failed", "error", err)
+			return nil // skip malformed messages
 		}
-		// Stub: log payload. Replace with FCM + Web Push when ready.
-		slog.Info("push stub", "title", msg.Title, "body", msg.Body, "link", msg.Link, "tokens", msg.DeviceTokens)
+
+		channel := centrifugo.ChannelFromRoomID(msg.RoomID)
+		payload := map[string]interface{}{
+			"event":   msg.Event,
+			"payload": msg.Payload,
+		}
+
+		if err := cfgo.Publish(ctx, channel, payload); err != nil {
+			slog.Error("centrifugo publish failed", "channel", channel, "error", err)
+			return err
+		}
+		slog.Debug("published to centrifugo", "channel", channel, "event", msg.Event)
 		return nil
 	})
 	if err != nil && err != context.Canceled {
@@ -70,5 +85,5 @@ func main() {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_ = healthSrv.Shutdown(shutdownCtx)
-	slog.Info("worker-push stopped")
+	slog.Info("worker-dispatch stopped")
 }

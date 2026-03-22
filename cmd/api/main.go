@@ -1,30 +1,121 @@
-// API: REST for core service — notifications by userId, preferences, subscribers.
+// API: REST for core service — notifications, preferences, subscribers, Centrifugo token.
 package main
 
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
+	"syscall"
+	"time"
 
 	"github.com/techinsight/be-techinsights-notification-service/configs"
-	"github.com/techinsight/be-techinsights-notification-service/internal/store/memory"
+	"github.com/techinsight/be-techinsights-notification-service/internal/domain"
+	"github.com/techinsight/be-techinsights-notification-service/internal/store"
+	mongostore "github.com/techinsight/be-techinsights-notification-service/internal/store/mongo"
+	"github.com/techinsight/be-techinsights-notification-service/pkg/centrifugo"
+	"github.com/techinsight/be-techinsights-notification-service/pkg/health"
+	"github.com/techinsight/be-techinsights-notification-service/pkg/logging"
+	database "github.com/techinsight/be-techinsights-notification-service/pkg/storage/database/mongodb"
 )
 
 func main() {
 	cfg, err := configs.Load()
 	if err != nil {
-		log.Fatalf("config: %v", err)
+		slog.Error("failed to load config", "error", err)
+		os.Exit(1)
 	}
-	notificationStore := memory.NewNotificationStore()
+	logging.Setup(cfg.App.Debug)
+
+	// MongoDB connection
+	mongoDB, err := database.NewMongoDB(database.MongoConfig{
+		URI:      cfg.Database.MongoDB.URI,
+		Database: cfg.Database.MongoDB.Database,
+	})
+	if err != nil {
+		slog.Error("failed to connect to MongoDB", "error", err)
+		os.Exit(1)
+	}
+	defer mongoDB.Close(context.Background())
+
+	// Ensure indexes
+	if err := mongostore.EnsureIndexes(context.Background(), mongoDB.Database); err != nil {
+		slog.Warn("failed to ensure indexes", "error", err)
+	}
+
+	// Stores
+	notificationStore := mongostore.NewNotificationStore(mongoDB.Database)
+	subscriberStore := mongostore.NewSubscriberStore(mongoDB.Database)
+	preferenceStore := mongostore.NewPreferenceStore(mongoDB.Database)
 
 	mux := http.NewServeMux()
 
-	// GET list notifications by userId (for core service)
-	mux.HandleFunc("GET /api/v1/users/{userId}/notifications", func(w http.ResponseWriter, r *http.Request) {
+	// Health endpoints
+	checker := health.NewHandler(
+		health.NewMongoChecker(mongoDB.Client),
+	)
+	mux.HandleFunc("GET /healthz", checker.Healthz)
+	mux.HandleFunc("GET /readyz", checker.Readyz)
+
+	// Centrifugo JWT token endpoint
+	mux.HandleFunc("POST /api/v1/auth/centrifugo-token", centrifugoTokenHandler(cfg))
+
+	// Notifications
+	mux.HandleFunc("GET /api/v1/users/{userId}/notifications", listNotifications(notificationStore))
+	mux.HandleFunc("GET /api/v1/notifications/{id}", getNotification(notificationStore))
+	mux.HandleFunc("PATCH /api/v1/notifications/{id}/read", markRead(notificationStore))
+
+	// Preferences
+	mux.HandleFunc("GET /api/v1/users/{userId}/preferences", getPreferences(preferenceStore))
+	mux.HandleFunc("PUT /api/v1/users/{userId}/preferences", setPreferences(preferenceStore))
+
+	// Subscribers
+	mux.HandleFunc("POST /api/v1/users/{userId}/subscribers", registerSubscriber(subscriberStore))
+	mux.HandleFunc("DELETE /api/v1/users/{userId}/subscribers/{token}", deleteSubscriber(subscriberStore))
+
+	srv := &http.Server{Addr: cfg.Servers.APIAddr, Handler: mux}
+	go func() {
+		slog.Info("api listening", "addr", cfg.Servers.APIAddr)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("server error", "error", err)
+		}
+	}()
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	<-ctx.Done()
+	stop()
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_ = srv.Shutdown(shutdownCtx)
+	slog.Info("api stopped")
+}
+
+func centrifugoTokenHandler(cfg *configs.Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			UserID string `json:"user_id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.UserID == "" {
+			http.Error(w, `{"error":"user_id is required"}`, http.StatusBadRequest)
+			return
+		}
+		token, err := centrifugo.GenerateConnectionToken(cfg.Centrifugo.HMACSecret, req.UserID, cfg.Centrifugo.TokenTTL)
+		if err != nil {
+			slog.Error("failed to generate centrifugo token", "error", err)
+			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"token": token})
+	}
+}
+
+func listNotifications(ns store.NotificationStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		userID := r.PathValue("userId")
 		if userID == "" {
 			http.Error(w, "missing userId", http.StatusBadRequest)
@@ -36,7 +127,7 @@ func main() {
 		}
 		unreadOnly := r.URL.Query().Get("unread_only") == "1" || r.URL.Query().Get("unread_only") == "true"
 
-		list, err := notificationStore.ListByUserID(r.Context(), userID, limit)
+		list, err := ns.ListByUserID(r.Context(), userID, limit)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -51,17 +142,18 @@ func main() {
 			list = filtered
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(list)
-	})
+		json.NewEncoder(w).Encode(list)
+	}
+}
 
-	// GET single notification
-	mux.HandleFunc("GET /api/v1/notifications/{id}", func(w http.ResponseWriter, r *http.Request) {
+func getNotification(ns store.NotificationStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("id")
 		if id == "" {
 			http.Error(w, "missing id", http.StatusBadRequest)
 			return
 		}
-		n, err := notificationStore.GetByID(r.Context(), id)
+		n, err := ns.GetByID(r.Context(), id)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -71,50 +163,96 @@ func main() {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(n)
-	})
+		json.NewEncoder(w).Encode(n)
+	}
+}
 
-	// PATCH mark notification as read (optional)
-	mux.HandleFunc("PATCH /api/v1/notifications/{id}/read", func(w http.ResponseWriter, r *http.Request) {
+func markRead(ns store.NotificationStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("id")
 		if id == "" {
 			http.Error(w, "missing id", http.StatusBadRequest)
 			return
 		}
-		if err := notificationStore.MarkRead(r.Context(), id); err != nil {
+		if err := ns.MarkRead(r.Context(), id); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
-	})
+	}
+}
 
-	// Preferences (placeholder; wire PreferenceStore when ready)
-	mux.HandleFunc("GET /api/v1/users/{userId}/preferences", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte("{}"))
-	})
-	mux.HandleFunc("PUT /api/v1/users/{userId}/preferences", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-
-	// Subscribers (placeholder; wire SubscriberStore when ready)
-	mux.HandleFunc("POST /api/v1/users/{userId}/subscribers", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusCreated)
-	})
-	mux.HandleFunc("DELETE /api/v1/users/{userId}/subscribers/{token}", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-
-	srv := &http.Server{Addr: cfg.Servers.APIAddr, Handler: mux}
-	go func() {
-		log.Printf("api listening on %s", cfg.Servers.APIAddr)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatal(err)
+func getPreferences(ps store.PreferenceStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID := r.PathValue("userId")
+		if userID == "" {
+			http.Error(w, "missing userId", http.StatusBadRequest)
+			return
 		}
-	}()
+		pref, err := ps.Get(r.Context(), userID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(pref)
+	}
+}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
-	<-ctx.Done()
-	stop()
-	_ = srv.Shutdown(context.Background())
+func setPreferences(ps store.PreferenceStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID := r.PathValue("userId")
+		if userID == "" {
+			http.Error(w, "missing userId", http.StatusBadRequest)
+			return
+		}
+		var pref domain.Preference
+		if err := json.NewDecoder(r.Body).Decode(&pref); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		pref.UserID = userID
+		if err := ps.Set(r.Context(), &pref); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func registerSubscriber(ss store.SubscriberStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID := r.PathValue("userId")
+		if userID == "" {
+			http.Error(w, "missing userId", http.StatusBadRequest)
+			return
+		}
+		var sub domain.Subscriber
+		if err := json.NewDecoder(r.Body).Decode(&sub); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		sub.UserID = userID
+		if err := ss.Upsert(r.Context(), &sub); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusCreated)
+	}
+}
+
+func deleteSubscriber(ss store.SubscriberStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID := r.PathValue("userId")
+		token := r.PathValue("token")
+		if userID == "" || token == "" {
+			http.Error(w, "missing userId or token", http.StatusBadRequest)
+			return
+		}
+		if err := ss.DeleteByToken(r.Context(), userID, token); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
 }

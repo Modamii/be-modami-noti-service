@@ -1,5 +1,73 @@
 package mongo
 
-// Placeholder: implement NotificationStore using your MongoDB client.
-// Copy your mongo client from config/mongo and use it here.
-// Example: func NewNotificationStore(db *mongo.Database) store.NotificationStore { ... }
+import (
+	"context"
+	"time"
+
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+
+	"github.com/techinsight/be-techinsights-notification-service/internal/domain"
+	"github.com/techinsight/be-techinsights-notification-service/internal/store"
+)
+
+const notificationsCollection = "notifications"
+
+type notificationStore struct {
+	coll *mongo.Collection
+}
+
+// NewNotificationStore returns a MongoDB-backed NotificationStore.
+func NewNotificationStore(db *mongo.Database) store.NotificationStore {
+	return &notificationStore{coll: db.Collection(notificationsCollection)}
+}
+
+func (s *notificationStore) Create(ctx context.Context, n *domain.Notification) error {
+	if n.CreatedAt.IsZero() {
+		n.CreatedAt = time.Now()
+	}
+	_, err := s.coll.InsertOne(ctx, n)
+	return err
+}
+
+func (s *notificationStore) GetByID(ctx context.Context, id string) (*domain.Notification, error) {
+	var n domain.Notification
+	err := s.coll.FindOne(ctx, bson.M{"_id": id}).Decode(&n)
+	if err == mongo.ErrNoDocuments {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &n, nil
+}
+
+func (s *notificationStore) ListByUserID(ctx context.Context, userID string, limit int) ([]*domain.Notification, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	opts := options.Find().
+		SetSort(bson.D{{Key: "created_at", Value: -1}}).
+		SetLimit(int64(limit))
+
+	cursor, err := s.coll.Find(ctx, bson.M{"user_id": userID}, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var results []*domain.Notification
+	if err := cursor.All(ctx, &results); err != nil {
+		return nil, err
+	}
+	if results == nil {
+		results = []*domain.Notification{}
+	}
+	return results, nil
+}
+
+func (s *notificationStore) MarkRead(ctx context.Context, id string) error {
+	_, err := s.coll.UpdateOne(ctx, bson.M{"_id": id}, bson.M{"$set": bson.M{"read": true}})
+	return err
+}

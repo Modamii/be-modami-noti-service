@@ -12,13 +12,14 @@ import (
 
 // Config holds only what the notification service uses.
 type Config struct {
-	App      AppConfig      `mapstructure:"app"`
-	Database DatabaseConfig `mapstructure:"database"`
-	Cache    CacheConfig    `mapstructure:"cache"`
-	Kafka    KafkaConfig    `mapstructure:"kafka"`
-	Queue    QueueConfig    `mapstructure:"queue"`
-	Servers  ServersConfig  `mapstructure:"servers"`
-	FCM      FCMConfig      `mapstructure:"fcm"`
+	App        AppConfig        `mapstructure:"app"`
+	Database   DatabaseConfig   `mapstructure:"database"`
+	Cache      CacheConfig      `mapstructure:"cache"`
+	Kafka      KafkaConfig      `mapstructure:"kafka"`
+	Queue      QueueConfig      `mapstructure:"queue"`
+	Servers    ServersConfig    `mapstructure:"servers"`
+	FCM        FCMConfig        `mapstructure:"fcm"`
+	Centrifugo CentrifugoConfig `mapstructure:"centrifugo"`
 }
 
 type AppConfig struct {
@@ -53,19 +54,24 @@ type KafkaConfig struct {
 }
 
 type QueueConfig struct {
-	WSKey        string `mapstructure:"ws_key"`
-	PushKey      string `mapstructure:"push_key"`
-	PubSubWSChan string `mapstructure:"pubsub_ws_channel"`
+	WSKey   string `mapstructure:"ws_key"`
+	PushKey string `mapstructure:"push_key"`
 }
 
 type ServersConfig struct {
-	APIAddr       string `mapstructure:"api_addr"`
-	WSGatewayAddr string `mapstructure:"ws_gateway_addr"`
-	IngestAddr    string `mapstructure:"ingest_addr"`
+	APIAddr    string `mapstructure:"api_addr"`
+	IngestAddr string `mapstructure:"ingest_addr"`
 }
 
 type FCMConfig struct {
 	CredentialsPath string `mapstructure:"credentials_path"`
+}
+
+type CentrifugoConfig struct {
+	APIURL     string `mapstructure:"api_url"`
+	APIKey     string `mapstructure:"api_key"`
+	HMACSecret string `mapstructure:"hmac_secret"`
+	TokenTTL   int    `mapstructure:"token_ttl"`
 }
 
 // Load reads config from Viper (config.yaml + optional config.{env}.yaml, env overrides).
@@ -117,10 +123,10 @@ func setDefaults() {
 	viper.SetDefault("cache.redis.addr", "localhost:6379")
 	viper.SetDefault("queue.ws_key", "notif:ws")
 	viper.SetDefault("queue.push_key", "notif:push")
-	viper.SetDefault("queue.pubsub_ws_channel", "notif:ws:dispatch")
 	viper.SetDefault("servers.api_addr", ":8080")
-	viper.SetDefault("servers.ws_gateway_addr", ":8081")
 	viper.SetDefault("servers.ingest_addr", ":8082")
+	viper.SetDefault("centrifugo.api_url", "http://localhost:8000/api")
+	viper.SetDefault("centrifugo.token_ttl", 3600)
 }
 
 func validateConfig(cfg *Config) error {

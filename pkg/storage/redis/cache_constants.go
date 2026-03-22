@@ -3,11 +3,10 @@ package redis
 import "time"
 
 const (
-	KeyAccountInfo   = "account_info"
-	KeyAccountEmail  = "account_email"
+	KeyNotificationCount = "notification_count"
+	KeyUserPreference    = "user_preference"
 )
 
 const (
-	KEY_ACCOUNT_INFO_EXPIRE  = 24 * time.Hour
-	KEY_ACCOUNT_EMAIL_EXPIRE = 24 * time.Hour
+	DefaultCacheTTL = 24 * time.Hour
 )

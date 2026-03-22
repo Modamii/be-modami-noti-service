@@ -25,12 +25,16 @@ kafka:
 queue:
   ws_key: "notif:ws"
   push_key: "notif:push"
-  pubsub_ws_channel: "notif:ws:dispatch"
 
 servers:
   api_addr: ":8080"
-  ws_gateway_addr: ":8081"
   ingest_addr: ":8082"
 
 fcm:
   credentials_path: ""
+
+centrifugo:
+  api_url: "http://localhost:8000/api"
+  api_key: "centrifugo-api-key"
+  hmac_secret: "centrifugo-hmac-secret"
+  token_ttl: 3600
