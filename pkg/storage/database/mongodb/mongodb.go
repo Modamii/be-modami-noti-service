@@ -2,8 +2,9 @@ package database
 
 import (
 	"context"
-	"log/slog"
 	"time"
+
+	"gitlab.com/lifegoeson-libs/pkg-logging/logger"
 
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -24,13 +25,20 @@ type MongoDB struct {
 	Database *mongo.Database
 }
 
-type MongoLogSink struct{}
+type MongoLogSink struct {
+	ctx context.Context
+}
+
+func NewMongoLogSink(ctx context.Context) *MongoLogSink {
+	return &MongoLogSink{ctx: ctx}
+}
 
 func (m *MongoLogSink) Info(level int, message string, keysAndValues ...interface{}) {}
 func (m *MongoLogSink) Error(err error, message string, keysAndValues ...interface{}) {}
 
 func NewMongoDB(config MongoConfig) (*MongoDB, error) {
 	ctx := context.Background()
+	l := logger.FromContext(ctx)
 
 	if config.Timeout == 0 {
 		config.Timeout = 30 * time.Second
@@ -46,7 +54,7 @@ func NewMongoDB(config MongoConfig) (*MongoDB, error) {
 	if config.EnableLogging {
 		loggerOpts = &options.LoggerOptions{
 			ComponentLevels: map[options.LogComponent]options.LogLevel{},
-			Sink:            &MongoLogSink{},
+			Sink:            NewMongoLogSink(ctx),
 		}
 	} else {
 		loggerOpts = &options.LoggerOptions{
@@ -67,14 +75,14 @@ func NewMongoDB(config MongoConfig) (*MongoDB, error) {
 
 	client, err := mongo.Connect(connectCtx, clientOpts)
 	if err != nil {
-		slog.Error("failed to connect to MongoDB", "error", err)
+		l.Error("Failed to connect to MongoDB", err)
 		return nil, err
 	}
 	if err := client.Ping(connectCtx, readpref.Primary()); err != nil {
-		slog.Error("failed to ping MongoDB", "error", err)
+		l.Error("Failed to ping MongoDB", err)
 		return nil, err
 	}
-	slog.Info("connected to MongoDB")
+	l.Info("Successfully connected to MongoDB")
 	return &MongoDB{
 		Client:   client,
 		Database: client.Database(config.Database),
@@ -82,11 +90,12 @@ func NewMongoDB(config MongoConfig) (*MongoDB, error) {
 }
 
 func (m *MongoDB) Close(ctx context.Context) error {
+	l := logger.FromContext(ctx)
 	if err := m.Client.Disconnect(ctx); err != nil {
-		slog.Error("failed to disconnect from MongoDB", "error", err)
+		l.Error("Failed to disconnect from MongoDB", err)
 		return err
 	}
-	slog.Info("disconnected from MongoDB")
+	l.Info("Disconnected from MongoDB")
 	return nil
 }
 

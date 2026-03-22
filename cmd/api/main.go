@@ -4,7 +4,7 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"log/slog"
+	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -18,17 +18,28 @@ import (
 	mongostore "github.com/techinsight/be-techinsights-notification-service/internal/store/mongo"
 	"github.com/techinsight/be-techinsights-notification-service/pkg/centrifugo"
 	"github.com/techinsight/be-techinsights-notification-service/pkg/health"
-	"github.com/techinsight/be-techinsights-notification-service/pkg/logging"
 	database "github.com/techinsight/be-techinsights-notification-service/pkg/storage/database/mongodb"
+	"gitlab.com/lifegoeson-libs/pkg-logging/logger"
 )
 
 func main() {
+	ctx := context.Background()
+
 	cfg, err := configs.Load()
 	if err != nil {
-		slog.Error("failed to load config", "error", err)
-		os.Exit(1)
+		log.Fatalf("config: %v", err)
 	}
-	logging.Setup(cfg.App.Debug)
+
+	loggingCfg := cfg.ToLoggingConfig()
+	if err := logger.Init(loggingCfg); err != nil {
+		log.Fatalf("failed to initialize logger: %v", err)
+	}
+	l := logger.FromContext(ctx)
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = logger.Shutdown(shutdownCtx)
+	}()
 
 	// MongoDB connection
 	mongoDB, err := database.NewMongoDB(database.MongoConfig{
@@ -36,14 +47,14 @@ func main() {
 		Database: cfg.Database.MongoDB.Database,
 	})
 	if err != nil {
-		slog.Error("failed to connect to MongoDB", "error", err)
+		l.Error("failed to connect to MongoDB", err)
 		os.Exit(1)
 	}
 	defer mongoDB.Close(context.Background())
 
 	// Ensure indexes
-	if err := mongostore.EnsureIndexes(context.Background(), mongoDB.Database); err != nil {
-		slog.Warn("failed to ensure indexes", "error", err)
+	if err := mongostore.EnsureIndexes(ctx, mongoDB.Database); err != nil {
+		l.Error("failed to ensure indexes", err)
 	}
 
 	// Stores
@@ -78,20 +89,20 @@ func main() {
 
 	srv := &http.Server{Addr: cfg.Servers.APIAddr, Handler: mux}
 	go func() {
-		slog.Info("api listening", "addr", cfg.Servers.APIAddr)
+		l.Info("api listening on " + cfg.Servers.APIAddr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			slog.Error("server error", "error", err)
+			l.Error("server error", err)
 		}
 	}()
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	<-ctx.Done()
+	sigCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	<-sigCtx.Done()
 	stop()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	_ = srv.Shutdown(shutdownCtx)
-	slog.Info("api stopped")
+	l.Info("api stopped")
 }
 
 func centrifugoTokenHandler(cfg *configs.Config) http.HandlerFunc {
@@ -105,7 +116,8 @@ func centrifugoTokenHandler(cfg *configs.Config) http.HandlerFunc {
 		}
 		token, err := centrifugo.GenerateConnectionToken(cfg.Centrifugo.HMACSecret, req.UserID, cfg.Centrifugo.TokenTTL)
 		if err != nil {
-			slog.Error("failed to generate centrifugo token", "error", err)
+			l := logger.FromContext(r.Context())
+			l.Error("failed to generate centrifugo token", err)
 			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 			return
 		}

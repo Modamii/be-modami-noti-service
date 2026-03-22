@@ -4,7 +4,7 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"log/slog"
+	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -18,20 +18,31 @@ import (
 	"github.com/techinsight/be-techinsights-notification-service/pkg/contract"
 	"github.com/techinsight/be-techinsights-notification-service/pkg/health"
 	"github.com/techinsight/be-techinsights-notification-service/pkg/kafka"
-	"github.com/techinsight/be-techinsights-notification-service/pkg/logging"
+	"gitlab.com/lifegoeson-libs/pkg-logging/logger"
 )
 
 func main() {
+	ctx := context.Background()
+
 	cfg, err := configs.Load()
 	if err != nil {
-		slog.Error("failed to load config", "error", err)
-		os.Exit(1)
+		log.Fatalf("config: %v", err)
 	}
-	logging.Setup(cfg.App.Debug)
+
+	loggingCfg := cfg.ToLoggingConfig()
+	if err := logger.Init(loggingCfg); err != nil {
+		log.Fatalf("failed to initialize logger: %v", err)
+	}
+	l := logger.FromContext(ctx)
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = logger.Shutdown(shutdownCtx)
+	}()
 
 	rdb := redis.NewClient(configs.RedisOptions(cfg))
-	if err := rdb.Ping(context.Background()).Err(); err != nil {
-		slog.Error("redis ping failed", "error", err)
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		l.Error("redis ping failed", err)
 		os.Exit(1)
 	}
 	defer rdb.Close()
@@ -39,30 +50,29 @@ func main() {
 	q := queue.New(rdb)
 	reg := NewRegistryWithHandlers(q, cfg.Queue.WSKey, cfg.Queue.PushKey)
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	sigCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	// Kafka consumer
 	if len(cfg.Kafka.Brokers) > 0 && cfg.Kafka.Brokers[0] != "" {
 		go func() {
-			slog.Info("starting kafka consumer", "topic", cfg.Kafka.NotificationTopic)
-			err := kafka.RunConsumer(ctx, cfg.Kafka.Brokers, cfg.Kafka.ConsumerGroupID, cfg.Kafka.NotificationTopic,
+			l.Info("starting kafka consumer for topic: " + cfg.Kafka.NotificationTopic)
+			err := kafka.RunConsumer(sigCtx, cfg.Kafka.Brokers, cfg.Kafka.ConsumerGroupID, cfg.Kafka.NotificationTopic,
 				func(ctx context.Context, key, value []byte) error {
 					var e contract.NotificationEvent
 					if err := json.Unmarshal(value, &e); err != nil {
-						slog.Warn("kafka: unmarshal event failed", "error", err)
+						logger.FromContext(ctx).Error("kafka: unmarshal event failed", err)
 						return nil
 					}
 					h, ok := reg.Get(e.Identity)
 					if !ok {
-						slog.Debug("kafka: no handler for identity", "identity", e.Identity)
 						return nil
 					}
 					return h(ctx, &e)
 				},
 			)
 			if err != nil && err != context.Canceled {
-				slog.Error("kafka consumer exited", "error", err)
+				l.Error("kafka consumer exited", err)
 			}
 		}()
 	}
@@ -87,7 +97,7 @@ func main() {
 			return
 		}
 		if err := h(r.Context(), &e); err != nil {
-			slog.Error("webhook handler error", "identity", e.Identity, "error", err)
+			logger.FromContext(r.Context()).Error("webhook handler error", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -96,17 +106,17 @@ func main() {
 
 	srv := &http.Server{Addr: cfg.Servers.IngestAddr, Handler: mux}
 	go func() {
-		slog.Info("ingest listening", "addr", cfg.Servers.IngestAddr)
+		l.Info("ingest listening on " + cfg.Servers.IngestAddr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			slog.Error("server error", "error", err)
+			l.Error("server error", err)
 		}
 	}()
 
-	<-ctx.Done()
+	<-sigCtx.Done()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	_ = srv.Shutdown(shutdownCtx)
-	slog.Info("ingest stopped")
+	l.Info("ingest stopped")
 }
 
 func NewRegistryWithHandlers(q *queue.Queue, queueWS, queuePush string) handlers.Registry {

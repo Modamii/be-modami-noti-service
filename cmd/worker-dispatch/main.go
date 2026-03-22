@@ -4,7 +4,7 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"log/slog"
+	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -17,20 +17,31 @@ import (
 	"github.com/techinsight/be-techinsights-notification-service/pkg/centrifugo"
 	"github.com/techinsight/be-techinsights-notification-service/pkg/event"
 	"github.com/techinsight/be-techinsights-notification-service/pkg/health"
-	"github.com/techinsight/be-techinsights-notification-service/pkg/logging"
+	"gitlab.com/lifegoeson-libs/pkg-logging/logger"
 )
 
 func main() {
+	ctx := context.Background()
+
 	cfg, err := configs.Load()
 	if err != nil {
-		slog.Error("failed to load config", "error", err)
-		os.Exit(1)
+		log.Fatalf("config: %v", err)
 	}
-	logging.Setup(cfg.App.Debug)
+
+	loggingCfg := cfg.ToLoggingConfig()
+	if err := logger.Init(loggingCfg); err != nil {
+		log.Fatalf("failed to initialize logger: %v", err)
+	}
+	l := logger.FromContext(ctx)
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = logger.Shutdown(shutdownCtx)
+	}()
 
 	rdb := redis.NewClient(configs.RedisOptions(cfg))
-	if err := rdb.Ping(context.Background()).Err(); err != nil {
-		slog.Error("redis ping failed", "error", err)
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		l.Error("redis ping failed", err)
 		os.Exit(1)
 	}
 	defer rdb.Close()
@@ -49,19 +60,19 @@ func main() {
 	healthSrv := &http.Server{Addr: ":9090", Handler: healthMux}
 	go func() {
 		if err := healthSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			slog.Error("health server error", "error", err)
+			l.Error("health server error", err)
 		}
 	}()
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	sigCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	slog.Info("worker-dispatch started", "queue", cfg.Queue.WSKey)
+	l.Info("worker-dispatch started, queue: " + cfg.Queue.WSKey)
 
-	err = q.Consume(ctx, cfg.Queue.WSKey, 5*time.Second, func(b []byte) error {
+	err = q.Consume(sigCtx, cfg.Queue.WSKey, 5*time.Second, func(b []byte) error {
 		var msg event.WSMessage
 		if err := json.Unmarshal(b, &msg); err != nil {
-			slog.Warn("unmarshal WSMessage failed", "error", err)
+			l.Error("unmarshal WSMessage failed", err)
 			return nil // skip malformed messages
 		}
 
@@ -71,19 +82,18 @@ func main() {
 			"payload": msg.Payload,
 		}
 
-		if err := cfgo.Publish(ctx, channel, payload); err != nil {
-			slog.Error("centrifugo publish failed", "channel", channel, "error", err)
+		if err := cfgo.Publish(sigCtx, channel, payload); err != nil {
+			l.Error("centrifugo publish failed", err)
 			return err
 		}
-		slog.Debug("published to centrifugo", "channel", channel, "event", msg.Event)
 		return nil
 	})
 	if err != nil && err != context.Canceled {
-		slog.Error("consume loop exited", "error", err)
+		l.Error("consume loop exited", err)
 	}
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_ = healthSrv.Shutdown(shutdownCtx)
-	slog.Info("worker-dispatch stopped")
+	l.Info("worker-dispatch stopped")
 }

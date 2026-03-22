@@ -38,3 +38,6 @@ centrifugo:
   api_key: "centrifugo-api-key"
   hmac_secret: "centrifugo-hmac-secret"
   token_ttl: 3600
+
+logging:
+  level: "info"

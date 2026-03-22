@@ -2,8 +2,9 @@ package redis
 
 import (
 	"context"
-	"log/slog"
 	"time"
+
+	"gitlab.com/lifegoeson-libs/pkg-logging/logger"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -53,19 +54,21 @@ func NewRedisClient(config RedisConfig) (*redis.Client, error) {
 	client := redis.NewClient(opts)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	l := logger.FromContext(ctx)
 	if err := client.Ping(ctx).Err(); err != nil {
-		slog.Error("failed to connect to Redis", "error", err)
+		l.Error("Failed to connect to Redis", err)
 		return nil, err
 	}
-	slog.Info("connected to Redis")
+	l.Info("Successfully connected to Redis")
 	return client, nil
 }
 
 func CloseRedis(ctx context.Context, client *redis.Client) error {
+	l := logger.FromContext(ctx)
 	if err := client.Close(); err != nil {
-		slog.Error("failed to close Redis connection", "error", err)
+		l.Error("Failed to close Redis connection", err)
 		return err
 	}
-	slog.Info("Redis connection closed")
+	l.Info("Redis connection closed")
 	return nil
 }

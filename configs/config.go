@@ -8,6 +8,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"github.com/spf13/viper"
+	logging "gitlab.com/lifegoeson-libs/pkg-logging"
 )
 
 // Config holds only what the notification service uses.
@@ -20,6 +21,11 @@ type Config struct {
 	Servers    ServersConfig    `mapstructure:"servers"`
 	FCM        FCMConfig        `mapstructure:"fcm"`
 	Centrifugo CentrifugoConfig `mapstructure:"centrifugo"`
+	Logging    LoggingConfig    `mapstructure:"logging"`
+}
+
+type LoggingConfig struct {
+	Level string `mapstructure:"level"`
 }
 
 type AppConfig struct {
@@ -115,9 +121,20 @@ func Load() (*Config, error) {
 }
 
 
+// ToLoggingConfig converts app config to the logging library config.
+func (c *Config) ToLoggingConfig() logging.Config {
+	return logging.Config{
+		ServiceName:    c.App.Name,
+		ServiceVersion: "1.0.0",
+		Environment:    c.App.Environment,
+		Level:          c.Logging.Level,
+	}
+}
+
 func setDefaults() {
 	viper.SetDefault("app.name", "notification-service")
 	viper.SetDefault("app.environment", "development")
+	viper.SetDefault("logging.level", "info")
 	viper.SetDefault("database.mongodb.uri", "mongodb://localhost:27017")
 	viper.SetDefault("database.mongodb.database", "notifications")
 	viper.SetDefault("cache.redis.addr", "localhost:6379")

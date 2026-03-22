@@ -3,9 +3,9 @@ package kafka
 import (
 	"context"
 	"fmt"
-	"log/slog"
 
 	"github.com/twmb/franz-go/pkg/kgo"
+	"gitlab.com/lifegoeson-libs/pkg-logging/logger"
 )
 
 // RunConsumer starts a Kafka consumer that reads from the given topic
@@ -22,7 +22,8 @@ func RunConsumer(ctx context.Context, brokers []string, group, topic string, han
 	}
 	defer client.Close()
 
-	slog.Info("kafka consumer started", "group", group, "topic", topic)
+	l := logger.FromContext(ctx)
+	l.Info("kafka consumer started, group: " + group + ", topic: " + topic)
 
 	for {
 		fetches := client.PollFetches(ctx)
@@ -31,12 +32,12 @@ func RunConsumer(ctx context.Context, brokers []string, group, topic string, han
 		}
 		if errs := fetches.Errors(); len(errs) > 0 {
 			for _, e := range errs {
-				slog.Error("kafka fetch error", "topic", e.Topic, "partition", e.Partition, "error", e.Err)
+				l.Error(fmt.Sprintf("kafka fetch error: topic=%s partition=%d", e.Topic, e.Partition), e.Err)
 			}
 		}
 		fetches.EachRecord(func(r *kgo.Record) {
 			if err := handler(ctx, r.Key, r.Value); err != nil {
-				slog.Error("kafka handler error", "topic", r.Topic, "offset", r.Offset, "error", err)
+				l.Error(fmt.Sprintf("kafka handler error: topic=%s offset=%d", r.Topic, r.Offset), err)
 			}
 		})
 	}
