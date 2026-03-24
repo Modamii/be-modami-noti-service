@@ -3,15 +3,20 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"time"
 
+	"github.com/google/uuid"
+	"github.com/techinsight/be-techinsights-notification-service/internal/domain"
 	"github.com/techinsight/be-techinsights-notification-service/internal/queue"
+	"github.com/techinsight/be-techinsights-notification-service/internal/store"
 	"github.com/techinsight/be-techinsights-notification-service/pkg/contract"
 	"github.com/techinsight/be-techinsights-notification-service/pkg/event"
+	"gitlab.com/lifegoeson-libs/pkg-logging/logger"
 )
 
 // ContentPublished handles identity content_published: build in_app + push from envelope payload.
 // Recipients from extra.To or derived from payload (e.g. audience in do[0].data).
-func ContentPublished(q *queue.Queue, queueWS, queuePush string) Handler {
+func ContentPublished(ns store.NotificationStore, q *queue.Queue, queueWS, queuePush string) Handler {
 	return func(ctx context.Context, e *contract.NotificationEvent) error {
 		payload := &e.Payload
 		if len(payload.Do) == 0 {
@@ -34,6 +39,24 @@ func ContentPublished(q *queue.Queue, queueWS, queuePush string) Handler {
 		inApp := map[string]interface{}{
 			"title": title, "body": body, "link": link,
 			"content_id": do.ID, "content_type": do.Type, "actor_id": actorID,
+		}
+
+		// Persist notification for each recipient
+		for _, uid := range userIDs {
+			notif := &domain.Notification{
+				ID:        uuid.New().String(),
+				UserID:    uid,
+				EventType: e.Identity,
+				Title:     title,
+				Body:      body,
+				Link:      link,
+				Read:      false,
+				Extra:     inApp,
+				CreatedAt: time.Now(),
+			}
+			if err := ns.Create(ctx, notif); err != nil {
+				logger.FromContext(ctx).Error("failed to persist notification", err)
+			}
 		}
 
 		channels := contract.IdentityChannels[e.Identity]

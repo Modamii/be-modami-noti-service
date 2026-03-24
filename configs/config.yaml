@@ -4,6 +4,8 @@ app:
   name: "notification-service"
   environment: "development"
   debug: true
+  cors_origins:
+    - "*"
 
 database:
   mongodb:

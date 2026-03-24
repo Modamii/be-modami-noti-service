@@ -15,9 +15,12 @@ import (
 	"github.com/techinsight/be-techinsights-notification-service/configs"
 	"github.com/techinsight/be-techinsights-notification-service/internal/handlers"
 	"github.com/techinsight/be-techinsights-notification-service/internal/queue"
+	"github.com/techinsight/be-techinsights-notification-service/internal/store"
+	mongostore "github.com/techinsight/be-techinsights-notification-service/internal/store/mongo"
 	"github.com/techinsight/be-techinsights-notification-service/pkg/contract"
 	"github.com/techinsight/be-techinsights-notification-service/pkg/health"
 	"github.com/techinsight/be-techinsights-notification-service/pkg/kafka"
+	database "github.com/techinsight/be-techinsights-notification-service/pkg/storage/database/mongodb"
 	"gitlab.com/lifegoeson-libs/pkg-logging/logger"
 )
 
@@ -40,6 +43,23 @@ func main() {
 		_ = logger.Shutdown(shutdownCtx)
 	}()
 
+	// MongoDB connection for persisting notifications
+	mongoDB, err := database.NewMongoDB(database.MongoConfig{
+		URI:      cfg.Database.MongoDB.URI,
+		Database: cfg.Database.MongoDB.Database,
+	})
+	if err != nil {
+		l.Error("failed to connect to MongoDB", err)
+		os.Exit(1)
+	}
+	defer mongoDB.Close(context.Background())
+
+	if err := mongostore.EnsureIndexes(ctx, mongoDB.Database); err != nil {
+		l.Error("failed to ensure indexes", err)
+	}
+
+	notificationStore := mongostore.NewNotificationStore(mongoDB.Database)
+
 	rdb := redis.NewClient(configs.RedisOptions(cfg))
 	if err := rdb.Ping(ctx).Err(); err != nil {
 		l.Error("redis ping failed", err)
@@ -48,7 +68,7 @@ func main() {
 	defer rdb.Close()
 
 	q := queue.New(rdb)
-	reg := NewRegistryWithHandlers(q, cfg.Queue.WSKey, cfg.Queue.PushKey)
+	reg := NewRegistryWithHandlers(notificationStore, q, cfg.Queue.WSKey, cfg.Queue.PushKey)
 
 	sigCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -119,9 +139,9 @@ func main() {
 	l.Info("ingest stopped")
 }
 
-func NewRegistryWithHandlers(q *queue.Queue, queueWS, queuePush string) handlers.Registry {
+func NewRegistryWithHandlers(ns store.NotificationStore, q *queue.Queue, queueWS, queuePush string) handlers.Registry {
 	reg := handlers.NewRegistry()
-	reg.Register(contract.ContentPublished, handlers.ContentPublished(q, queueWS, queuePush))
-	reg.Register(contract.CommentCreated, handlers.CommentCreated(q, queueWS, queuePush))
+	reg.Register(contract.ContentPublished, handlers.ContentPublished(ns, q, queueWS, queuePush))
+	reg.Register(contract.CommentCreated, handlers.CommentCreated(ns, q, queueWS, queuePush))
 	return reg
 }

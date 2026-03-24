@@ -10,10 +10,14 @@ import (
 
 // EnsureIndexes creates required indexes for all collections.
 func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
-	// notifications: compound index for user queries sorted by time
+	// notifications: compound indexes for user queries
 	_, err := db.Collection(notificationsCollection).Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{
 			Keys:    bson.D{{Key: "user_id", Value: 1}, {Key: "created_at", Value: -1}},
+			Options: options.Index(),
+		},
+		{
+			Keys:    bson.D{{Key: "user_id", Value: 1}, {Key: "read", Value: 1}, {Key: "created_at", Value: -1}},
 			Options: options.Index(),
 		},
 	})

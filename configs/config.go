@@ -29,9 +29,10 @@ type LoggingConfig struct {
 }
 
 type AppConfig struct {
-	Name        string `mapstructure:"name"`
-	Environment string `mapstructure:"environment"`
-	Debug       bool   `mapstructure:"debug"`
+	Name        string   `mapstructure:"name"`
+	Environment string   `mapstructure:"environment"`
+	Debug       bool     `mapstructure:"debug"`
+	CORSOrigins []string `mapstructure:"cors_origins"`
 }
 
 type DatabaseConfig struct {
@@ -54,9 +55,10 @@ type RedisCacheConfig struct {
 }
 
 type KafkaConfig struct {
-	Brokers          []string `mapstructure:"brokers"`
-	ConsumerGroupID  string   `mapstructure:"consumer_group_id"`
-	NotificationTopic string `mapstructure:"notification_topic"`
+	Brokers           []string `mapstructure:"brokers"`
+	ClientID          string   `mapstructure:"client_id"`
+	ConsumerGroupID   string   `mapstructure:"consumer_group_id"`
+	NotificationTopic string   `mapstructure:"notification_topic"`
 }
 
 type QueueConfig struct {
@@ -144,6 +146,7 @@ func setDefaults() {
 	viper.SetDefault("servers.ingest_addr", ":8082")
 	viper.SetDefault("centrifugo.api_url", "http://localhost:8000/api")
 	viper.SetDefault("centrifugo.token_ttl", 3600)
+	viper.SetDefault("app.cors_origins", []string{"*"})
 }
 
 func validateConfig(cfg *Config) error {

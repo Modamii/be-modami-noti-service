@@ -6,12 +6,33 @@ import (
 	"github.com/techinsight/be-techinsights-notification-service/internal/domain"
 )
 
-// NotificationStore: copy your MongoDB client into config/mongo and wire here.
+// PaginationParams for paginated list queries.
+type PaginationParams struct {
+	Page       int
+	PerPage    int
+	UnreadOnly bool
+}
+
+// PaginatedResult holds paginated query results.
+type PaginatedResult struct {
+	Items      []*domain.Notification
+	Total      int64
+	Page       int
+	PerPage    int
+	TotalPages int
+	HasMore    bool
+}
+
+// NotificationStore: MongoDB-backed notification storage.
 type NotificationStore interface {
 	Create(ctx context.Context, n *domain.Notification) error
 	GetByID(ctx context.Context, id string) (*domain.Notification, error)
 	ListByUserID(ctx context.Context, userID string, limit int) ([]*domain.Notification, error)
+	ListByUserIDPaginated(ctx context.Context, userID string, params PaginationParams) (*PaginatedResult, error)
 	MarkRead(ctx context.Context, id string) error
+	MarkAllRead(ctx context.Context, userID string) (int64, error)
+	Delete(ctx context.Context, id string) error
+	CountUnread(ctx context.Context, userID string) (int64, error)
 }
 
 type SubscriberStore interface {
