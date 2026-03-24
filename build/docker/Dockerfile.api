@@ -1,7 +1,21 @@
-FROM golang:1.23-alpine AS builder
+FROM golang:1.25-alpine AS builder
 WORKDIR /app
+RUN apk add --no-cache git
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=secret,id=gitlab_username,required=false \
+    --mount=type=secret,id=gitlab_token,required=false \
+    set -e; \
+    if [ -f /run/secrets/gitlab_username ] && [ -f /run/secrets/gitlab_token ]; then \
+        GITLAB_USERNAME="$(cat /run/secrets/gitlab_username)"; \
+        GITLAB_TOKEN="$(cat /run/secrets/gitlab_token)"; \
+        printf "machine gitlab.com\nlogin %s\npassword %s\n" "$GITLAB_USERNAME" "$GITLAB_TOKEN" > ~/.netrc; \
+        chmod 600 ~/.netrc; \
+        git config --global url."https://${GITLAB_USERNAME}:${GITLAB_TOKEN}@gitlab.com/".insteadOf "https://gitlab.com/"; \
+        go env -w GOPRIVATE=gitlab.com/lifegoeson-libs/*; \
+        go env -w GONOPROXY=gitlab.com/lifegoeson-libs/*; \
+        go env -w GONOSUMDB=gitlab.com/lifegoeson-libs/*; \
+    fi; \
+    go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /bin/api ./cmd/api
 
