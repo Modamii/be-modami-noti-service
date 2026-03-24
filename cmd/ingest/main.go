@@ -15,7 +15,7 @@ import (
 	"github.com/techinsight/be-techinsights-notification-service/configs"
 	"github.com/techinsight/be-techinsights-notification-service/internal/handlers"
 	"github.com/techinsight/be-techinsights-notification-service/internal/queue"
-	"github.com/techinsight/be-techinsights-notification-service/internal/store"
+	"github.com/techinsight/be-techinsights-notification-service/internal/service"
 	mongostore "github.com/techinsight/be-techinsights-notification-service/internal/store/mongo"
 	"github.com/techinsight/be-techinsights-notification-service/pkg/contract"
 	"github.com/techinsight/be-techinsights-notification-service/pkg/health"
@@ -68,7 +68,13 @@ func main() {
 	defer rdb.Close()
 
 	q := queue.New(rdb)
-	reg := NewRegistryWithHandlers(notificationStore, q, cfg.Queue.WSKey, cfg.Queue.PushKey)
+
+	// Build dispatchers (Strategy Pattern) and notification service
+	inAppDispatcher := service.NewInAppDispatcher(q, cfg.Queue.WSKey)
+	pushDispatcher := service.NewPushDispatcher(q, cfg.Queue.PushKey)
+	notifSvc := service.NewNotificationService(notificationStore, inAppDispatcher, pushDispatcher)
+
+	reg := NewRegistryWithHandlers(notifSvc)
 
 	sigCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -139,9 +145,9 @@ func main() {
 	l.Info("ingest stopped")
 }
 
-func NewRegistryWithHandlers(ns store.NotificationStore, q *queue.Queue, queueWS, queuePush string) handlers.Registry {
+func NewRegistryWithHandlers(svc *service.NotificationService) handlers.Registry {
 	reg := handlers.NewRegistry()
-	reg.Register(contract.ContentPublished, handlers.ContentPublished(ns, q, queueWS, queuePush))
-	reg.Register(contract.CommentCreated, handlers.CommentCreated(ns, q, queueWS, queuePush))
+	reg.Register(contract.ContentPublished, handlers.ContentPublished(svc))
+	reg.Register(contract.CommentCreated, handlers.CommentCreated(svc))
 	return reg
 }

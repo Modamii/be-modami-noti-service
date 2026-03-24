@@ -1,0 +1,53 @@
+package api
+
+import (
+	"encoding/json"
+	"net/http"
+
+	"github.com/techinsight/be-techinsights-notification-service/configs"
+	"github.com/techinsight/be-techinsights-notification-service/pkg/centrifugo"
+	"github.com/techinsight/be-techinsights-notification-service/pkg/httputil"
+	"gitlab.com/lifegoeson-libs/pkg-logging/logger"
+)
+
+// AuthHandler groups auth-related HTTP handlers.
+type AuthHandler struct {
+	cfg *configs.Config
+}
+
+func NewAuthHandler(cfg *configs.Config) *AuthHandler {
+	return &AuthHandler{cfg: cfg}
+}
+
+func (h *AuthHandler) RegisterRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("POST /api/v1/auth/centrifugo-token", h.CentrifugoToken)
+}
+
+// CentrifugoToken godoc
+// @Summary Generate Centrifugo connection token
+// @Description Generate a JWT token for client WebSocket connection to Centrifugo
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param body body object{user_id=string} true "User ID"
+// @Success 200 {object} object{data=object{token=string}}
+// @Failure 400 {object} httputil.Response
+// @Failure 500 {object} httputil.Response
+// @Router /auth/centrifugo-token [post]
+func (h *AuthHandler) CentrifugoToken(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		UserID string `json:"user_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.UserID == "" {
+		httputil.ErrBadRequest(w, "user_id is required")
+		return
+	}
+	token, err := centrifugo.GenerateConnectionToken(h.cfg.Centrifugo.HMACSecret, req.UserID, h.cfg.Centrifugo.TokenTTL)
+	if err != nil {
+		l := logger.FromContext(r.Context())
+		l.Error("failed to generate centrifugo token", err)
+		httputil.ErrInternal(w, "failed to generate token")
+		return
+	}
+	httputil.RespondJSON(w, http.StatusOK, map[string]string{"token": token}, nil)
+}

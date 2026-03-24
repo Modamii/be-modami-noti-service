@@ -3,27 +3,20 @@ package handlers
 import (
 	"context"
 	"fmt"
-	"time"
 
-	"github.com/google/uuid"
-	"github.com/techinsight/be-techinsights-notification-service/internal/domain"
-	"github.com/techinsight/be-techinsights-notification-service/internal/queue"
-	"github.com/techinsight/be-techinsights-notification-service/internal/store"
+	"github.com/techinsight/be-techinsights-notification-service/internal/service"
 	"github.com/techinsight/be-techinsights-notification-service/pkg/contract"
-	"github.com/techinsight/be-techinsights-notification-service/pkg/event"
-	"gitlab.com/lifegoeson-libs/pkg-logging/logger"
 )
 
-// ContentPublished handles identity content_published: build in_app + push from envelope payload.
-// Recipients from extra.To or derived from payload (e.g. audience in do[0].data).
-func ContentPublished(ns store.NotificationStore, q *queue.Queue, queueWS, queuePush string) Handler {
+// ContentPublished extracts event-specific data and delegates to NotificationService.
+func ContentPublished(svc *service.NotificationService) Handler {
 	return func(ctx context.Context, e *contract.NotificationEvent) error {
 		payload := &e.Payload
 		if len(payload.Do) == 0 {
 			return nil
 		}
 		do := payload.Do[0]
-		actorID := payload.Actor.ID
+
 		title := getStr(do.Data, "title")
 		if title == "" {
 			title = "New content"
@@ -36,95 +29,16 @@ func ContentPublished(ns store.NotificationStore, q *queue.Queue, queueWS, queue
 			return nil
 		}
 
-		inApp := map[string]interface{}{
-			"title": title, "body": body, "link": link,
-			"content_id": do.ID, "content_type": do.Type, "actor_id": actorID,
-		}
-
-		// Persist notification for each recipient
-		for _, uid := range userIDs {
-			notif := &domain.Notification{
-				ID:        uuid.New().String(),
-				UserID:    uid,
-				EventType: e.Identity,
-				Title:     title,
-				Body:      body,
-				Link:      link,
-				Read:      false,
-				Extra:     inApp,
-				CreatedAt: time.Now(),
-			}
-			if err := ns.Create(ctx, notif); err != nil {
-				logger.FromContext(ctx).Error("failed to persist notification", err)
-			}
-		}
-
-		channels := contract.IdentityChannels[e.Identity]
-		for _, ch := range channels {
-			switch ch {
-			case contract.ChannelInApp:
-				for _, uid := range userIDs {
-					roomID := "user:" + uid
-					wsMsg := event.WSMessage{RoomID: roomID, Event: e.Identity, Payload: inApp}
-					if err := q.Enqueue(ctx, queueWS, wsMsg); err != nil {
-						return err
-					}
-				}
-			case contract.ChannelPush:
-				pushMsg := event.PushMessage{
-					DeviceTokens: nil,
-					Title:        title,
-					Body:         body,
-					Link:         link,
-				}
-				if err := q.Enqueue(ctx, queuePush, pushMsg); err != nil {
-					return err
-				}
-			}
-		}
-		return nil
-	}
-}
-
-// resolveRecipients returns user IDs from extra.To or payload (e.g. audience_ids in do[0].data).
-func resolveRecipients(e *contract.NotificationEvent) []string {
-	if e.Extra != nil && e.Extra.To != nil {
-		return sliceFromInterface(e.Extra.To)
-	}
-	if len(e.Payload.Do) == 0 {
-		return nil
-	}
-	data := e.Payload.Do[0].Data
-	if data == nil {
-		return nil
-	}
-	if ids, ok := data["audience_ids"]; ok {
-		return sliceFromInterface(ids)
-	}
-	return nil
-}
-
-func getStr(m map[string]interface{}, key string) string {
-	if m == nil {
-		return ""
-	}
-	v, _ := m[key].(string)
-	return v
-}
-
-func sliceFromInterface(v interface{}) []string {
-	switch x := v.(type) {
-	case []string:
-		return x
-	case []interface{}:
-		var out []string
-		for _, i := range x {
-			if s, ok := i.(string); ok {
-				out = append(out, s)
-			}
-		}
-		return out
-	default:
-		return nil
+		return svc.Process(ctx, &service.NotificationParams{
+			Identity: e.Identity,
+			Title:    title,
+			Body:     body,
+			Link:     link,
+			Extra: map[string]interface{}{
+				"title": title, "body": body, "link": link,
+				"content_id": do.ID, "content_type": do.Type, "actor_id": payload.Actor.ID,
+			},
+			UserIDs: userIDs,
+		})
 	}
 }
