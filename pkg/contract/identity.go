@@ -12,3 +12,13 @@ var AllIdentities = []string{
 	ContentPublished,
 	CommentCreated,
 }
+
+// IsValidIdentity checks whether the given identity is registered.
+func IsValidIdentity(identity string) bool {
+	for _, id := range AllIdentities {
+		if id == identity {
+			return true
+		}
+	}
+	return false
+}

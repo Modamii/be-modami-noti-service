@@ -67,8 +67,9 @@ type QueueConfig struct {
 }
 
 type ServersConfig struct {
-	APIAddr    string `mapstructure:"api_addr"`
-	IngestAddr string `mapstructure:"ingest_addr"`
+	APIAddr     string `mapstructure:"api_addr"`
+	IngestAddr  string `mapstructure:"ingest_addr"`
+	GatewayAddr string `mapstructure:"gateway_addr"`
 }
 
 type FCMConfig struct {
@@ -144,6 +145,7 @@ func setDefaults() {
 	viper.SetDefault("queue.push_key", "notif:push")
 	viper.SetDefault("servers.api_addr", ":8080")
 	viper.SetDefault("servers.ingest_addr", ":8082")
+	viper.SetDefault("servers.gateway_addr", ":8084")
 	viper.SetDefault("centrifugo.api_url", "http://localhost:8000/api")
 	viper.SetDefault("centrifugo.token_ttl", 3600)
 	viper.SetDefault("app.cors_origins", []string{"*"})
