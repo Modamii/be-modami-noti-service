@@ -1,9 +1,11 @@
 {
   "token_hmac_secret_key": "${CENTRIFUGO_HMAC_SECRET}",
   "api_key": "${CENTRIFUGO_API_KEY}",
-  "admin": true,
-  "admin_password": "${CENTRIFUGO_ADMIN_PASSWORD}",
-  "admin_secret": "${CENTRIFUGO_ADMIN_SECRET}",
+  "admin": {
+    "enabled": true,
+    "password": "${CENTRIFUGO_ADMIN_PASSWORD}",
+    "secret": "${CENTRIFUGO_ADMIN_SECRET}"
+  },
   "engine": "redis",
   "redis_address": "redis:6379",
   "redis_password": "${REDIS_PASSWORD}",
