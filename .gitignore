@@ -1,0 +1,43 @@
+# Binaries
+bin/
+*.exe
+*.out
+
+# Go build cache
+/tmp/
+
+# Environment / secrets — never commit
+.env
+.env.*
+!.env.example
+
+# Redis config with real password
+config/redis.conf
+
+# Kubernetes secret manifests with real values
+deploy/k8s/secret.yaml
+
+# Firebase / FCM credentials
+*.json.key
+firebase-credentials.json
+fcm-credentials.json
+service-account*.json
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test / coverage output
+*.out
+coverage.html
+
+# Swagger generated (optional — remove if you want to commit generated docs)
+# docs/docs.go
+# docs/swagger.json
+# docs/swagger.yaml

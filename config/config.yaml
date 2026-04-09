@@ -70,8 +70,8 @@ fcm:
 
 centrifugo:
   api_url: "http://localhost:8000/api"
-  api_key: "centrifugo-api-key"
-  hmac_secret: "centrifugo-hmac-secret"
+  api_key: ""      # set via CENTRIFUGO_API_KEY env var
+  hmac_secret: ""  # set via CENTRIFUGO_HMAC_SECRET env var
   token_ttl: 3600
 
 observability:

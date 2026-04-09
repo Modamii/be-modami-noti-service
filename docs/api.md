@@ -39,7 +39,7 @@ Generates a JWT for the client to connect to Centrifugo WebSocket. See [websocke
 ```json
 {
   "data": {
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+    "token": "\..."
   }
 }
 ```

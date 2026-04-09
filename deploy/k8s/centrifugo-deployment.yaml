@@ -41,9 +41,15 @@ spec:
                   name: notification-secret
                   key: CENTRIFUGO_API_KEY
             - name: CENTRIFUGO_ADMIN_PASSWORD
-              value: "admin"
+              valueFrom:
+                secretKeyRef:
+                  name: notification-secret
+                  key: CENTRIFUGO_ADMIN_PASSWORD
             - name: CENTRIFUGO_ADMIN_SECRET
-              value: "admin-secret"
+              valueFrom:
+                secretKeyRef:
+                  name: notification-secret
+                  key: CENTRIFUGO_ADMIN_SECRET
             - name: REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:

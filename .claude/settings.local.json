@@ -12,7 +12,9 @@
       "Bash(make swagger:*)",
       "Bash(for f:*)",
       "Bash(ls:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(\\\\ git:*)",
+      "Bash(echo:*)"
     ]
   }
 }
