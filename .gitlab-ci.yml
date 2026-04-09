@@ -94,9 +94,9 @@ gitleaks-scan:
     - if: $CI_COMMIT_BRANCH == "master"
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
 
-# ─── RELEASE ──────────────────────────────────────────────────────────────────
+# ─── RELEASE — 5 parallel Docker jobs ────────────────────────────────────────
 
-docker-build-push:
+.docker-build: &docker-build
   stage: release
   image: docker:24
   services:
@@ -108,32 +108,57 @@ docker-build-push:
     - |
       if [ -z "$DOCKERHUB_USERNAME" ] || [ -z "$DOCKERHUB_TOKEN" ]; then
         echo "ERROR: DOCKERHUB_USERNAME or DOCKERHUB_TOKEN is not set."
-        echo "Go to GitLab > Settings > CI/CD > Variables and add them."
         exit 1
       fi
     - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
   script:
     - IMAGE_TAG="v1.0.$(echo $CI_COMMIT_SHA | cut -c1-7)"
-    - echo "Building all services with tag $IMAGE_TAG"
+    - FULL_IMAGE="$DOCKER_REGISTRY/$DOCKER_REPO-$SERVICE"
+    - echo "Building $FULL_IMAGE:$IMAGE_TAG"
     - |
-      for SERVICE in api ingest ws-gateway worker-dispatch worker-push; do
-        echo "──────────────────────────────────────"
-        echo "Building: $SERVICE"
-        FULL_IMAGE="$DOCKER_REGISTRY/$DOCKER_REPO-$SERVICE"
-        DOCKER_BUILDKIT=1 docker build \
-          --secret id=gitlab_username,env=GITLAB_CI_USERNAME \
-          --secret id=gitlab_token,env=CI_JOB_TOKEN \
-          -f build/docker/Dockerfile.$SERVICE \
-          -t "$FULL_IMAGE:latest" \
-          -t "$FULL_IMAGE:$IMAGE_TAG" \
-          .
-        docker push "$FULL_IMAGE:latest"
-        docker push "$FULL_IMAGE:$IMAGE_TAG"
-        echo "Pushed $FULL_IMAGE:$IMAGE_TAG"
-      done
+      DOCKER_BUILDKIT=1 docker build \
+        --secret id=gitlab_username,env=GITLAB_CI_USERNAME \
+        --secret id=gitlab_token,env=CI_JOB_TOKEN \
+        -f build/docker/Dockerfile.$SERVICE \
+        -t "$FULL_IMAGE:latest" \
+        -t "$FULL_IMAGE:$IMAGE_TAG" \
+        .
+    - docker push "$FULL_IMAGE:latest"
+    - docker push "$FULL_IMAGE:$IMAGE_TAG"
+    - echo "Pushed $FULL_IMAGE:$IMAGE_TAG"
   rules:
     - if: $CI_COMMIT_BRANCH == "master"
   needs:
     - build
     - trivy-scan
     - gitleaks-scan
+
+docker-build-api:
+  <<: *docker-build
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    SERVICE: api
+
+docker-build-ingest:
+  <<: *docker-build
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    SERVICE: ingest
+
+docker-build-ws-gateway:
+  <<: *docker-build
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    SERVICE: ws-gateway
+
+docker-build-worker-dispatch:
+  <<: *docker-build
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    SERVICE: worker-dispatch
+
+docker-build-worker-push:
+  <<: *docker-build
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    SERVICE: worker-push
