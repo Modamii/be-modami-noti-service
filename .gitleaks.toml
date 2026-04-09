@@ -1,0 +1,7 @@
+[allowlist]
+description = "False positives"
+
+regexes = [
+  # CGO_ENABLED=0 is a Go build flag, not a secret
+  '''CGO_ENABLED=\d''',
+]
