@@ -20,7 +20,7 @@ spec:
         - name: api
           image: notification-service/api:latest
           ports:
-            - containerPort: 8080
+            - containerPort: 7070
               name: http
           envFrom:
             - configMapRef:
@@ -56,7 +56,7 @@ spec:
   selector:
     app: notification-api
   ports:
-    - port: 8080
-      targetPort: 8080
+    - port: 7070
+      targetPort: 7070
       protocol: TCP
   type: ClusterIP

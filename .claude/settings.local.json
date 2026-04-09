@@ -9,7 +9,8 @@
       "Bash(swag init:*)",
       "Bash(go build:*)",
       "Bash(grep:*)",
-      "Bash(make swagger:*)"
+      "Bash(make swagger:*)",
+      "Bash(for f:*)"
     ]
   }
 }

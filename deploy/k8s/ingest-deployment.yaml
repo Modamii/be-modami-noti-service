@@ -20,7 +20,7 @@ spec:
         - name: ingest
           image: notification-service/ingest:latest
           ports:
-            - containerPort: 8082
+            - containerPort: 7071
               name: http
           envFrom:
             - configMapRef:
@@ -56,7 +56,7 @@ spec:
   selector:
     app: notification-ingest
   ports:
-    - port: 8082
-      targetPort: 8082
+    - port: 7071
+      targetPort: 7071
       protocol: TCP
   type: ClusterIP

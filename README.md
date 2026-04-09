@@ -20,9 +20,9 @@ Event → Handler (build + enqueue) → Redis ws/push queue → Worker → Deliv
 | NOTIF_PUBSUB_WS | notif:ws:dispatch |
 | MONGO_URI | mongodb://localhost:27017 |
 | MONGO_DB | notifications |
-| API_ADDR | :8080 |
+| API_ADDR | :7070 |
 | WS_GATEWAY_ADDR | :8081 |
-| INGEST_ADDR | :8082 |
+| INGEST_ADDR | :7071 |
 
 Copy cấu hình Kafka/Mongo/Redis của bạn vào:
 
@@ -54,7 +54,7 @@ go run ./cmd/ingest
 Test webhook:
 
 ```bash
-curl -X POST http://localhost:8082/webhook -H "Content-Type: application/json" -d '{"type":"post.published","payload":{"post_id":"p1","author_id":"a1","title":"Hi","body":"Body","audience_ids":["u1","u2"]}}'
+curl -X POST http://localhost:7074/webhook -H "Content-Type: application/json" -d '{"type":"post.published","payload":{"post_id":"p1","author_id":"a1","title":"Hi","body":"Body","audience_ids":["u1","u2"]}}'
 ```
 
 WS client: kết nối tới `ws://localhost:8081/ws`, gửi đầu tiên: `{"action":"subscribe","user_id":"u1","topic":""}`.

@@ -20,7 +20,7 @@ spec:
         - name: worker-dispatch
           image: notification-service/worker-dispatch:latest
           ports:
-            - containerPort: 9090
+            - containerPort: 7073
               name: health
           envFrom:
             - configMapRef:

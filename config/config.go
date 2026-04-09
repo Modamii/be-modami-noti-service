@@ -235,7 +235,7 @@ func setDefaults() {
 	viper.SetDefault("app.name", "modami-notification-service")
 	viper.SetDefault("app.version", "1.0.0")
 	viper.SetDefault("app.environment", "development")
-	viper.SetDefault("app.port", 8080)
+	viper.SetDefault("app.port", 7070)
 	viper.SetDefault("app.shutdown_timeout", "30s")
 	viper.SetDefault("app.read_timeout", "30s")
 	viper.SetDefault("app.write_timeout", "30s")
@@ -255,9 +255,9 @@ func setDefaults() {
 	viper.SetDefault("queue.ws_key", "notif:ws")
 	viper.SetDefault("queue.push_key", "notif:push")
 
-	viper.SetDefault("servers.api_addr", ":8080")
-	viper.SetDefault("servers.ingest_addr", ":8082")
-	viper.SetDefault("servers.gateway_addr", ":8084")
+	viper.SetDefault("servers.api_addr", ":7070")
+	viper.SetDefault("servers.ingest_addr", ":7071")
+	viper.SetDefault("servers.gateway_addr", ":7072")
 
 	viper.SetDefault("centrifugo.api_url", "http://localhost:8000/api")
 	viper.SetDefault("centrifugo.token_ttl", 3600)

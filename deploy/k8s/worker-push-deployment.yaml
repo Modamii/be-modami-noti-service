@@ -20,7 +20,7 @@ spec:
         - name: worker-push
           image: notification-service/worker-push:latest
           ports:
-            - containerPort: 9091
+            - containerPort: 7074
               name: health
           envFrom:
             - configMapRef:

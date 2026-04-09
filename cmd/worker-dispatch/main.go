@@ -58,7 +58,7 @@ func main() {
 	healthMux := http.NewServeMux()
 	healthMux.HandleFunc("GET /healthz", checker.Healthz)
 	healthMux.HandleFunc("GET /readyz", checker.Readyz)
-	healthSrv := &http.Server{Addr: ":9090", Handler: healthMux}
+	healthSrv := &http.Server{Addr: ":7073", Handler: healthMux}
 	go func() {
 		if err := healthSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			l.Error("health server error", err)
