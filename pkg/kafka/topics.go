@@ -1,7 +1,7 @@
 package kafka
 
 import (
-	config "github.com/techinsight/be-techinsights-notification-service/configs"
+	config "be-modami-no-service/config"
 )
 
 type KafkaTopics struct {

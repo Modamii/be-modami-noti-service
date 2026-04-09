@@ -3,9 +3,9 @@ package service
 import (
 	"context"
 
-	"github.com/techinsight/be-techinsights-notification-service/internal/queue"
-	"github.com/techinsight/be-techinsights-notification-service/pkg/contract"
-	"github.com/techinsight/be-techinsights-notification-service/pkg/event"
+	"be-modami-no-service/internal/queue"
+	"be-modami-no-service/pkg/contract"
+	"be-modami-no-service/pkg/event"
 )
 
 // InAppDispatcher implements ChannelDispatcher for WebSocket (in-app) delivery via Centrifugo.

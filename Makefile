@@ -9,12 +9,18 @@ DOCKER_INGEST ?= build/docker/Dockerfile.ingest
 DOCKER_WORKER_DISPATCH ?= build/docker/Dockerfile.worker-dispatch
 DOCKER_WORKER_PUSH ?= build/docker/Dockerfile.worker-push
 
+SWAG ?= swag
+
 .PHONY: help deps tidy fmt fmt-check vet test build-api build-ingest build-worker-dispatch build-worker-push build-all ci \
-	docker-build-api docker-build-ingest docker-build-worker-dispatch docker-build-worker-push docker-build-all
+	docker-build-api docker-build-ingest docker-build-worker-dispatch docker-build-worker-push docker-build-all \
+	swagger \
+	run-api run-ingest run-ws-gateway run-worker-dispatch run-worker-push
 
 help:
 	@echo "Available targets:"
 	@echo "  deps tidy fmt fmt-check vet test ci"
+	@echo "  swagger"
+	@echo "  run-api run-ingest run-ws-gateway run-worker-dispatch run-worker-push"
 	@echo "  build-api build-ingest build-worker-dispatch build-worker-push build-all"
 	@echo "  docker-build-api docker-build-ingest docker-build-worker-dispatch docker-build-worker-push docker-build-all"
 
@@ -35,6 +41,24 @@ vet:
 
 test:
 	$(GO) test ./...
+
+swagger:
+	$(SWAG) init -g cmd/api/main.go -o docs --parseDependency --parseInternal
+
+run-api:
+	$(GO) run ./cmd/api
+
+run-ingest:
+	$(GO) run ./cmd/ingest
+
+run-ws-gateway:
+	$(GO) run ./cmd/ws-gateway
+
+run-worker-dispatch:
+	$(GO) run ./cmd/worker-dispatch
+
+run-worker-push:
+	$(GO) run ./cmd/worker-push
 
 build-api:
 	CGO_ENABLED=0 GOOS=linux $(GO) build -ldflags="-s -w" -o ./bin/api ./cmd/api

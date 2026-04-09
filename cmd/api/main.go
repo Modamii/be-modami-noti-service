@@ -1,7 +1,7 @@
-// @title TechInsight Notification Service API
+// @title Modami Notification Service API
 // @version 1.0
-// @description REST API for the TechInsight notification service. Manages notifications, user preferences, device subscribers, and Centrifugo WebSocket tokens.
-// @BasePath /api/v1
+// @description REST API for the Modami notification service. Manages notifications, user preferences, device subscribers, and Centrifugo WebSocket tokens.
+// @BasePath /v1/noti-services
 // @schemes http https
 // @produce json
 // @consume json
@@ -18,16 +18,18 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/techinsight/be-techinsights-notification-service/configs"
-	"github.com/techinsight/be-techinsights-notification-service/internal/api"
-	mongostore "github.com/techinsight/be-techinsights-notification-service/internal/store/mongo"
-	"github.com/techinsight/be-techinsights-notification-service/pkg/health"
-	"github.com/techinsight/be-techinsights-notification-service/pkg/httputil"
-	database "github.com/techinsight/be-techinsights-notification-service/pkg/storage/database/mongodb"
+	"be-modami-no-service/config"
+	"be-modami-no-service/internal/api"
+	mongostore "be-modami-no-service/internal/store/mongo"
+	"be-modami-no-service/pkg/health"
+	"be-modami-no-service/pkg/httputil"
+	database "be-modami-no-service/pkg/storage/database/mongodb"
+
 	"gitlab.com/lifegoeson-libs/pkg-logging/logger"
 
+	_ "be-modami-no-service/docs"
+
 	httpSwagger "github.com/swaggo/http-swagger"
-	_ "github.com/techinsight/be-techinsights-notification-service/docs"
 )
 
 func main() {
@@ -51,8 +53,8 @@ func main() {
 
 	// MongoDB connection
 	mongoDB, err := database.NewMongoDB(database.MongoConfig{
-		URI:      cfg.Database.MongoDB.URI,
-		Database: cfg.Database.MongoDB.Database,
+		URI:      cfg.MongoDB.URI,
+		Database: cfg.MongoDB.Database,
 	})
 	if err != nil {
 		l.Error("failed to connect to MongoDB", err)
@@ -102,9 +104,9 @@ func main() {
 	srv := &http.Server{
 		Addr:         cfg.Servers.APIAddr,
 		Handler:      handler,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		ReadTimeout:  cfg.App.ParseReadTimeout(),
+		WriteTimeout: cfg.App.ParseWriteTimeout(),
+		IdleTimeout:  cfg.App.ParseIdleTimeout(),
 	}
 	go func() {
 		l.Info("api listening on " + cfg.Servers.APIAddr)
@@ -117,7 +119,7 @@ func main() {
 	<-sigCtx.Done()
 	stop()
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.App.ParseShutdownTimeout())
 	defer cancel()
 	_ = srv.Shutdown(shutdownCtx)
 	l.Info("api stopped")

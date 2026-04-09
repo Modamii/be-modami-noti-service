@@ -1,6 +1,6 @@
-basePath: /api/v1
+basePath: /v1/noti-services
 definitions:
-  github_com_techinsight_be-techinsights-notification-service_internal_domain.Notification:
+  be-modami-no-service_internal_domain.Notification:
     properties:
       body:
         type: string
@@ -22,7 +22,7 @@ definitions:
       user_id:
         type: string
     type: object
-  github_com_techinsight_be-techinsights-notification-service_internal_domain.Preference:
+  be-modami-no-service_internal_domain.Preference:
     properties:
       in_app_enabled:
         type: boolean
@@ -31,7 +31,7 @@ definitions:
       user_id:
         type: string
     type: object
-  github_com_techinsight_be-techinsights-notification-service_internal_domain.Subscriber:
+  be-modami-no-service_internal_domain.Subscriber:
     properties:
       device_token:
         type: string
@@ -49,7 +49,7 @@ definitions:
           type: string
         type: object
     type: object
-  github_com_techinsight_be-techinsights-notification-service_pkg_httputil.APIError:
+  be-modami-no-service_pkg_httputil.APIError:
     properties:
       code:
         type: string
@@ -58,7 +58,7 @@ definitions:
       message:
         type: string
     type: object
-  github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Meta:
+  be-modami-no-service_pkg_httputil.Meta:
     properties:
       has_more:
         type: boolean
@@ -71,21 +71,21 @@ definitions:
       total_pages:
         type: integer
     type: object
-  github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response:
+  be-modami-no-service_pkg_httputil.Response:
     properties:
       data: {}
       errors:
         items:
-          $ref: '#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.APIError'
+          $ref: '#/definitions/be-modami-no-service_pkg_httputil.APIError'
         type: array
       meta:
-        $ref: '#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Meta'
+        $ref: '#/definitions/be-modami-no-service_pkg_httputil.Meta'
     type: object
 info:
   contact: {}
-  description: REST API for the TechInsight notification service. Manages notifications,
+  description: REST API for the Modami notification service. Manages notifications,
     user preferences, device subscribers, and Centrifugo WebSocket tokens.
-  title: TechInsight Notification Service API
+  title: Modami Notification Service API
   version: "1.0"
 paths:
   /auth/centrifugo-token:
@@ -119,11 +119,11 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response'
+            $ref: '#/definitions/be-modami-no-service_pkg_httputil.Response'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response'
+            $ref: '#/definitions/be-modami-no-service_pkg_httputil.Response'
       summary: Generate Centrifugo connection token
       tags:
       - auth
@@ -139,14 +139,10 @@ paths:
       responses:
         "204":
           description: No Content
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response'
+            $ref: '#/definitions/be-modami-no-service_pkg_httputil.Response'
       summary: Delete a notification
       tags:
       - notifications
@@ -165,23 +161,19 @@ paths:
           description: OK
           schema:
             allOf:
-            - $ref: '#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response'
+            - $ref: '#/definitions/be-modami-no-service_pkg_httputil.Response'
             - properties:
                 data:
-                  $ref: '#/definitions/github_com_techinsight_be-techinsights-notification-service_internal_domain.Notification'
+                  $ref: '#/definitions/be-modami-no-service_internal_domain.Notification'
               type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response'
+            $ref: '#/definitions/be-modami-no-service_pkg_httputil.Response'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response'
+            $ref: '#/definitions/be-modami-no-service_pkg_httputil.Response'
       summary: Get a notification by ID
       tags:
       - notifications
@@ -197,14 +189,10 @@ paths:
       responses:
         "204":
           description: No Content
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response'
+            $ref: '#/definitions/be-modami-no-service_pkg_httputil.Response'
       summary: Mark a notification as read
       tags:
       - notifications
@@ -238,23 +226,23 @@ paths:
           description: OK
           schema:
             allOf:
-            - $ref: '#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response'
+            - $ref: '#/definitions/be-modami-no-service_pkg_httputil.Response'
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/github_com_techinsight_be-techinsights-notification-service_internal_domain.Notification'
+                    $ref: '#/definitions/be-modami-no-service_internal_domain.Notification'
                   type: array
                 meta:
-                  $ref: '#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Meta'
+                  $ref: '#/definitions/be-modami-no-service_pkg_httputil.Meta'
               type: object
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response'
+            $ref: '#/definitions/be-modami-no-service_pkg_httputil.Response'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response'
+            $ref: '#/definitions/be-modami-no-service_pkg_httputil.Response'
       summary: List user notifications
       tags:
       - notifications
@@ -274,7 +262,7 @@ paths:
           description: OK
           schema:
             allOf:
-            - $ref: '#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response'
+            - $ref: '#/definitions/be-modami-no-service_pkg_httputil.Response'
             - properties:
                 data:
                   properties:
@@ -283,14 +271,10 @@ paths:
                       type: integer
                   type: object
               type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response'
+            $ref: '#/definitions/be-modami-no-service_pkg_httputil.Response'
       summary: Mark all notifications as read
       tags:
       - notifications
@@ -310,7 +294,7 @@ paths:
           description: OK
           schema:
             allOf:
-            - $ref: '#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response'
+            - $ref: '#/definitions/be-modami-no-service_pkg_httputil.Response'
             - properties:
                 data:
                   properties:
@@ -319,14 +303,10 @@ paths:
                       type: integer
                   type: object
               type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response'
+            $ref: '#/definitions/be-modami-no-service_pkg_httputil.Response'
       summary: Count unread notifications
       tags:
       - notifications
@@ -346,19 +326,15 @@ paths:
           description: OK
           schema:
             allOf:
-            - $ref: '#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response'
+            - $ref: '#/definitions/be-modami-no-service_pkg_httputil.Response'
             - properties:
                 data:
-                  $ref: '#/definitions/github_com_techinsight_be-techinsights-notification-service_internal_domain.Preference'
+                  $ref: '#/definitions/be-modami-no-service_internal_domain.Preference'
               type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response'
+            $ref: '#/definitions/be-modami-no-service_pkg_httputil.Response'
       summary: Get user preferences
       tags:
       - preferences
@@ -377,18 +353,18 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/github_com_techinsight_be-techinsights-notification-service_internal_domain.Preference'
+          $ref: '#/definitions/be-modami-no-service_internal_domain.Preference'
       responses:
         "204":
           description: No Content
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response'
+            $ref: '#/definitions/be-modami-no-service_pkg_httputil.Response'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response'
+            $ref: '#/definitions/be-modami-no-service_pkg_httputil.Response'
       summary: Update user preferences
       tags:
       - preferences
@@ -408,18 +384,18 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/github_com_techinsight_be-techinsights-notification-service_internal_domain.Subscriber'
+          $ref: '#/definitions/be-modami-no-service_internal_domain.Subscriber'
       responses:
         "201":
           description: Created
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response'
+            $ref: '#/definitions/be-modami-no-service_pkg_httputil.Response'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response'
+            $ref: '#/definitions/be-modami-no-service_pkg_httputil.Response'
       summary: Register a device subscriber
       tags:
       - subscribers
@@ -443,11 +419,11 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response'
+            $ref: '#/definitions/be-modami-no-service_pkg_httputil.Response'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response'
+            $ref: '#/definitions/be-modami-no-service_pkg_httputil.Response'
       summary: Delete a device subscriber
       tags:
       - subscribers

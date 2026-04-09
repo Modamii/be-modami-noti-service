@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/techinsight/be-techinsights-notification-service/internal/domain"
-	"github.com/techinsight/be-techinsights-notification-service/internal/store"
-	"github.com/techinsight/be-techinsights-notification-service/pkg/httputil"
+	"be-modami-no-service/internal/domain"
+	"be-modami-no-service/internal/store"
+	"be-modami-no-service/pkg/httputil"
 )
 
 // SubscriberHandler groups subscriber-related HTTP handlers.
@@ -19,8 +19,8 @@ func NewSubscriberHandler(s store.SubscriberStore) *SubscriberHandler {
 }
 
 func (h *SubscriberHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("POST /api/v1/users/{userId}/subscribers", h.Register)
-	mux.HandleFunc("DELETE /api/v1/users/{userId}/subscribers/{token}", h.Delete)
+	mux.HandleFunc("POST /v1/noti-services/users/{userId}/subscribers", h.Register)
+	mux.HandleFunc("DELETE /v1/noti-services/users/{userId}/subscribers/{token}", h.Delete)
 }
 
 // Register godoc

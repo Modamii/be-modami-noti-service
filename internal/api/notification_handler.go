@@ -4,8 +4,9 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/techinsight/be-techinsights-notification-service/internal/store"
-	"github.com/techinsight/be-techinsights-notification-service/pkg/httputil"
+	"be-modami-no-service/internal/domain"
+	"be-modami-no-service/internal/store"
+	"be-modami-no-service/pkg/httputil"
 )
 
 // NotificationHandler groups all notification-related HTTP handlers.
@@ -19,12 +20,12 @@ func NewNotificationHandler(s store.NotificationStore) *NotificationHandler {
 
 // RegisterRoutes registers notification routes on the given mux.
 func (h *NotificationHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/v1/users/{userId}/notifications", h.List)
-	mux.HandleFunc("GET /api/v1/users/{userId}/notifications/unread-count", h.CountUnread)
-	mux.HandleFunc("PATCH /api/v1/users/{userId}/notifications/read-all", h.MarkAllRead)
-	mux.HandleFunc("GET /api/v1/notifications/{id}", h.GetByID)
-	mux.HandleFunc("PATCH /api/v1/notifications/{id}/read", h.MarkRead)
-	mux.HandleFunc("DELETE /api/v1/notifications/{id}", h.Delete)
+	mux.HandleFunc("GET /v1/noti-services/users/{userId}/notifications", h.List)
+	mux.HandleFunc("GET /v1/noti-services/users/{userId}/notifications/unread-count", h.CountUnread)
+	mux.HandleFunc("PATCH /v1/noti-services/users/{userId}/notifications/read-all", h.MarkAllRead)
+	mux.HandleFunc("GET /v1/noti-services/notifications/{id}", h.GetByID)
+	mux.HandleFunc("PATCH /v1/noti-services/notifications/{id}/read", h.MarkRead)
+	mux.HandleFunc("DELETE /v1/noti-services/notifications/{id}", h.Delete)
 }
 
 // List godoc
@@ -92,7 +93,9 @@ func (h *NotificationHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		httputil.ErrBadRequest(w, "missing id")
 		return
 	}
-	n, err := h.store.GetByID(r.Context(), id)
+	var n *domain.Notification
+	var err error
+	n, err = h.store.GetByID(r.Context(), id)
 	if err != nil {
 		httputil.ErrInternal(w, "failed to get notification")
 		return

@@ -1,4 +1,4 @@
-module github.com/techinsight/be-techinsights-notification-service
+module be-modami-no-service
 
 go 1.25.0
 

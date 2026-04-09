@@ -6,8 +6,9 @@ import (
 	"strings"
 	"time"
 
+	"be-modami-no-service/pkg/centrifugo"
+
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/techinsight/be-techinsights-notification-service/pkg/centrifugo"
 	"gitlab.com/lifegoeson-libs/pkg-logging/logger"
 )
 

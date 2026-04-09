@@ -8,12 +8,12 @@
     ],
     "swagger": "2.0",
     "info": {
-        "description": "REST API for the TechInsight notification service. Manages notifications, user preferences, device subscribers, and Centrifugo WebSocket tokens.",
-        "title": "TechInsight Notification Service API",
+        "description": "REST API for the Modami notification service. Manages notifications, user preferences, device subscribers, and Centrifugo WebSocket tokens.",
+        "title": "Modami Notification Service API",
         "contact": {},
         "version": "1.0"
     },
-    "basePath": "/api/v1",
+    "basePath": "/v1/noti-services",
     "paths": {
         "/auth/centrifugo-token": {
             "post": {
@@ -64,13 +64,13 @@
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response"
+                            "$ref": "#/definitions/be-modami-no-service_pkg_httputil.Response"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response"
+                            "$ref": "#/definitions/be-modami-no-service_pkg_httputil.Response"
                         }
                     }
                 }
@@ -101,35 +101,29 @@
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response"
+                                    "$ref": "#/definitions/be-modami-no-service_pkg_httputil.Response"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/github_com_techinsight_be-techinsights-notification-service_internal_domain.Notification"
+                                            "$ref": "#/definitions/be-modami-no-service_internal_domain.Notification"
                                         }
                                     }
                                 }
                             ]
                         }
                     },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response"
-                        }
-                    },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response"
+                            "$ref": "#/definitions/be-modami-no-service_pkg_httputil.Response"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response"
+                            "$ref": "#/definitions/be-modami-no-service_pkg_httputil.Response"
                         }
                     }
                 }
@@ -153,16 +147,10 @@
                     "204": {
                         "description": "No Content"
                     },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response"
-                        }
-                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response"
+                            "$ref": "#/definitions/be-modami-no-service_pkg_httputil.Response"
                         }
                     }
                 }
@@ -188,16 +176,10 @@
                     "204": {
                         "description": "No Content"
                     },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response"
-                        }
-                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response"
+                            "$ref": "#/definitions/be-modami-no-service_pkg_httputil.Response"
                         }
                     }
                 }
@@ -248,7 +230,7 @@
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response"
+                                    "$ref": "#/definitions/be-modami-no-service_pkg_httputil.Response"
                                 },
                                 {
                                     "type": "object",
@@ -256,11 +238,11 @@
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/github_com_techinsight_be-techinsights-notification-service_internal_domain.Notification"
+                                                "$ref": "#/definitions/be-modami-no-service_internal_domain.Notification"
                                             }
                                         },
                                         "meta": {
-                                            "$ref": "#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Meta"
+                                            "$ref": "#/definitions/be-modami-no-service_pkg_httputil.Meta"
                                         }
                                     }
                                 }
@@ -270,13 +252,13 @@
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response"
+                            "$ref": "#/definitions/be-modami-no-service_pkg_httputil.Response"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response"
+                            "$ref": "#/definitions/be-modami-no-service_pkg_httputil.Response"
                         }
                     }
                 }
@@ -307,7 +289,7 @@
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response"
+                                    "$ref": "#/definitions/be-modami-no-service_pkg_httputil.Response"
                                 },
                                 {
                                     "type": "object",
@@ -326,16 +308,10 @@
                             ]
                         }
                     },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response"
-                        }
-                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response"
+                            "$ref": "#/definitions/be-modami-no-service_pkg_httputil.Response"
                         }
                     }
                 }
@@ -366,7 +342,7 @@
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response"
+                                    "$ref": "#/definitions/be-modami-no-service_pkg_httputil.Response"
                                 },
                                 {
                                     "type": "object",
@@ -385,16 +361,10 @@
                             ]
                         }
                     },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response"
-                        }
-                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response"
+                            "$ref": "#/definitions/be-modami-no-service_pkg_httputil.Response"
                         }
                     }
                 }
@@ -425,29 +395,23 @@
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response"
+                                    "$ref": "#/definitions/be-modami-no-service_pkg_httputil.Response"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/github_com_techinsight_be-techinsights-notification-service_internal_domain.Preference"
+                                            "$ref": "#/definitions/be-modami-no-service_internal_domain.Preference"
                                         }
                                     }
                                 }
                             ]
                         }
                     },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response"
-                        }
-                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response"
+                            "$ref": "#/definitions/be-modami-no-service_pkg_httputil.Response"
                         }
                     }
                 }
@@ -475,7 +439,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/github_com_techinsight_be-techinsights-notification-service_internal_domain.Preference"
+                            "$ref": "#/definitions/be-modami-no-service_internal_domain.Preference"
                         }
                     }
                 ],
@@ -486,13 +450,13 @@
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response"
+                            "$ref": "#/definitions/be-modami-no-service_pkg_httputil.Response"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response"
+                            "$ref": "#/definitions/be-modami-no-service_pkg_httputil.Response"
                         }
                     }
                 }
@@ -522,7 +486,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/github_com_techinsight_be-techinsights-notification-service_internal_domain.Subscriber"
+                            "$ref": "#/definitions/be-modami-no-service_internal_domain.Subscriber"
                         }
                     }
                 ],
@@ -533,13 +497,13 @@
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response"
+                            "$ref": "#/definitions/be-modami-no-service_pkg_httputil.Response"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response"
+                            "$ref": "#/definitions/be-modami-no-service_pkg_httputil.Response"
                         }
                     }
                 }
@@ -575,13 +539,13 @@
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response"
+                            "$ref": "#/definitions/be-modami-no-service_pkg_httputil.Response"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response"
+                            "$ref": "#/definitions/be-modami-no-service_pkg_httputil.Response"
                         }
                     }
                 }
@@ -589,7 +553,7 @@
         }
     },
     "definitions": {
-        "github_com_techinsight_be-techinsights-notification-service_internal_domain.Notification": {
+        "be-modami-no-service_internal_domain.Notification": {
             "type": "object",
             "properties": {
                 "body": {
@@ -622,7 +586,7 @@
                 }
             }
         },
-        "github_com_techinsight_be-techinsights-notification-service_internal_domain.Preference": {
+        "be-modami-no-service_internal_domain.Preference": {
             "type": "object",
             "properties": {
                 "in_app_enabled": {
@@ -636,7 +600,7 @@
                 }
             }
         },
-        "github_com_techinsight_be-techinsights-notification-service_internal_domain.Subscriber": {
+        "be-modami-no-service_internal_domain.Subscriber": {
             "type": "object",
             "properties": {
                 "device_token": {
@@ -663,7 +627,7 @@
                 }
             }
         },
-        "github_com_techinsight_be-techinsights-notification-service_pkg_httputil.APIError": {
+        "be-modami-no-service_pkg_httputil.APIError": {
             "type": "object",
             "properties": {
                 "code": {
@@ -677,7 +641,7 @@
                 }
             }
         },
-        "github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Meta": {
+        "be-modami-no-service_pkg_httputil.Meta": {
             "type": "object",
             "properties": {
                 "has_more": {
@@ -697,18 +661,18 @@
                 }
             }
         },
-        "github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Response": {
+        "be-modami-no-service_pkg_httputil.Response": {
             "type": "object",
             "properties": {
                 "data": {},
                 "errors": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.APIError"
+                        "$ref": "#/definitions/be-modami-no-service_pkg_httputil.APIError"
                     }
                 },
                 "meta": {
-                    "$ref": "#/definitions/github_com_techinsight_be-techinsights-notification-service_pkg_httputil.Meta"
+                    "$ref": "#/definitions/be-modami-no-service_pkg_httputil.Meta"
                 }
             }
         }

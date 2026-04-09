@@ -9,8 +9,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
-	"github.com/techinsight/be-techinsights-notification-service/internal/domain"
-	"github.com/techinsight/be-techinsights-notification-service/internal/store"
+	"be-modami-no-service/internal/domain"
+	"be-modami-no-service/internal/store"
 )
 
 const notificationsCollection = "notifications"

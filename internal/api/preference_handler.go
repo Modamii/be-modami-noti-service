@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/techinsight/be-techinsights-notification-service/internal/domain"
-	"github.com/techinsight/be-techinsights-notification-service/internal/store"
-	"github.com/techinsight/be-techinsights-notification-service/pkg/httputil"
+	"be-modami-no-service/internal/domain"
+	"be-modami-no-service/internal/store"
+	"be-modami-no-service/pkg/httputil"
 )
 
 // PreferenceHandler groups preference-related HTTP handlers.
@@ -19,8 +19,8 @@ func NewPreferenceHandler(s store.PreferenceStore) *PreferenceHandler {
 }
 
 func (h *PreferenceHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/v1/users/{userId}/preferences", h.Get)
-	mux.HandleFunc("PUT /api/v1/users/{userId}/preferences", h.Set)
+	mux.HandleFunc("GET /v1/noti-services/users/{userId}/preferences", h.Get)
+	mux.HandleFunc("PUT /v1/noti-services/users/{userId}/preferences", h.Set)
 }
 
 // Get godoc

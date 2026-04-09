@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/techinsight/be-techinsights-notification-service/internal/service"
-	"github.com/techinsight/be-techinsights-notification-service/pkg/contract"
+	"be-modami-no-service/internal/service"
+	"be-modami-no-service/pkg/contract"
 )
 
 // ContentPublished extracts event-specific data and delegates to NotificationService.

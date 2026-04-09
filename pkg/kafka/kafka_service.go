@@ -1,12 +1,12 @@
 package kafka
 
 import (
+	config "be-modami-no-service/config"
 	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
-	config "github.com/techinsight/be-techinsights-notification-service/configs"
 	"time"
 
 	"github.com/twmb/franz-go/pkg/kadm"

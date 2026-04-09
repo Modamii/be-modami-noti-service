@@ -3,7 +3,7 @@ package store
 import (
 	"context"
 
-	"github.com/techinsight/be-techinsights-notification-service/internal/domain"
+	"be-modami-no-service/internal/domain"
 )
 
 // PaginationParams for paginated list queries.

@@ -1,9 +1,9 @@
 package kafka
 
 import (
+	config "be-modami-no-service/config"
 	"crypto/tls"
 	"fmt"
-	config "github.com/techinsight/be-techinsights-notification-service/configs"
 	"time"
 
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -36,11 +36,11 @@ type SASLConfig struct {
 }
 func GetDefaultKafkaConfig(cfg *config.Config) *KafkaConfig {
 	return &KafkaConfig{
-		Env:                 cfg.App.Environment,
+		Env:                 cfg.Kafka.Env,
 		PostfixID:           "default",
-		Brokers:             cfg.Kafka.Brokers,
+		Brokers:             cfg.Kafka.Brokers(),
 		ClientID:            cfg.Kafka.ClientID,
-		ConsumerGroupID:     cfg.Kafka.ConsumerGroupID,
+		ConsumerGroupID:     cfg.Kafka.ConsumerGroup,
 		ProducerOnlyMode:    false,
 		ConnectionTimeout:   30 * time.Second,
 		ConsumerMaxBytes:    10000,

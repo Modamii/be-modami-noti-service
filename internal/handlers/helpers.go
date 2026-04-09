@@ -1,6 +1,6 @@
 package handlers
 
-import "github.com/techinsight/be-techinsights-notification-service/pkg/contract"
+import "be-modami-no-service/pkg/contract"
 
 // resolveRecipients returns user IDs from extra.To or payload (e.g. audience_ids in do[0].data).
 func resolveRecipients(e *contract.NotificationEvent) []string {

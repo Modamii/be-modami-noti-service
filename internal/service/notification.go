@@ -4,10 +4,11 @@ import (
 	"context"
 	"time"
 
+	"be-modami-no-service/internal/domain"
+	"be-modami-no-service/internal/store"
+	"be-modami-no-service/pkg/contract"
+
 	"github.com/google/uuid"
-	"github.com/techinsight/be-techinsights-notification-service/internal/domain"
-	"github.com/techinsight/be-techinsights-notification-service/internal/store"
-	"github.com/techinsight/be-techinsights-notification-service/pkg/contract"
 	"gitlab.com/lifegoeson-libs/pkg-logging/logger"
 )
 

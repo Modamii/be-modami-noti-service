@@ -12,16 +12,17 @@ import (
 	"syscall"
 	"time"
 
+	"be-modami-no-service/config"
+	"be-modami-no-service/internal/handlers"
+	"be-modami-no-service/internal/queue"
+	"be-modami-no-service/internal/service"
+	mongostore "be-modami-no-service/internal/store/mongo"
+	"be-modami-no-service/pkg/contract"
+	"be-modami-no-service/pkg/health"
+	"be-modami-no-service/pkg/kafka"
+	database "be-modami-no-service/pkg/storage/database/mongodb"
+
 	"github.com/redis/go-redis/v9"
-	"github.com/techinsight/be-techinsights-notification-service/configs"
-	"github.com/techinsight/be-techinsights-notification-service/internal/handlers"
-	"github.com/techinsight/be-techinsights-notification-service/internal/queue"
-	"github.com/techinsight/be-techinsights-notification-service/internal/service"
-	mongostore "github.com/techinsight/be-techinsights-notification-service/internal/store/mongo"
-	"github.com/techinsight/be-techinsights-notification-service/pkg/contract"
-	"github.com/techinsight/be-techinsights-notification-service/pkg/health"
-	"github.com/techinsight/be-techinsights-notification-service/pkg/kafka"
-	database "github.com/techinsight/be-techinsights-notification-service/pkg/storage/database/mongodb"
 	"gitlab.com/lifegoeson-libs/pkg-logging/logger"
 )
 
@@ -46,8 +47,8 @@ func main() {
 
 	// MongoDB
 	mongoDB, err := database.NewMongoDB(database.MongoConfig{
-		URI:      cfg.Database.MongoDB.URI,
-		Database: cfg.Database.MongoDB.Database,
+		URI:      cfg.MongoDB.URI,
+		Database: cfg.MongoDB.Database,
 	})
 	if err != nil {
 		l.Error("failed to connect to MongoDB", err)
@@ -90,7 +91,7 @@ func main() {
 	defer stop()
 
 	// Kafka consumer using KafkaService with retry, DLQ, and trace propagation
-	if len(cfg.Kafka.Brokers) > 0 && cfg.Kafka.Brokers[0] != "" {
+	if cfg.Kafka.Enable && cfg.Kafka.BrokerList != "" {
 		kafkaSvc, err := kafka.NewKafkaService(nil, cfg)
 		if err != nil {
 			l.Error("failed to create kafka service", err)

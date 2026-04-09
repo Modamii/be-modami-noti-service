@@ -7,8 +7,8 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/techinsight/be-techinsights-notification-service/internal/domain"
-	"github.com/techinsight/be-techinsights-notification-service/internal/store"
+	"be-modami-no-service/internal/domain"
+	"be-modami-no-service/internal/store"
 )
 
 var idCounter atomic.Uint64

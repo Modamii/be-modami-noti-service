@@ -6,8 +6,9 @@ import (
 	"net/http"
 	"time"
 
+	"be-modami-no-service/pkg/centrifugo"
+
 	"github.com/redis/go-redis/v9"
-	"github.com/techinsight/be-techinsights-notification-service/pkg/centrifugo"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 )

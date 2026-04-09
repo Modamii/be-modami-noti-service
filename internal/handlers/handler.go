@@ -3,7 +3,7 @@ package handlers
 import (
 	"context"
 
-	"github.com/techinsight/be-techinsights-notification-service/pkg/contract"
+	"be-modami-no-service/pkg/contract"
 )
 
 // Handler processes an event: build notification, resolve recipients, enqueue by channels.

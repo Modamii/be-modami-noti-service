@@ -11,12 +11,13 @@ import (
 	"syscall"
 	"time"
 
+	"be-modami-no-service/config"
+	"be-modami-no-service/internal/queue"
+	"be-modami-no-service/pkg/centrifugo"
+	"be-modami-no-service/pkg/event"
+	"be-modami-no-service/pkg/health"
+
 	"github.com/redis/go-redis/v9"
-	"github.com/techinsight/be-techinsights-notification-service/configs"
-	"github.com/techinsight/be-techinsights-notification-service/internal/queue"
-	"github.com/techinsight/be-techinsights-notification-service/pkg/centrifugo"
-	"github.com/techinsight/be-techinsights-notification-service/pkg/event"
-	"github.com/techinsight/be-techinsights-notification-service/pkg/health"
 	"gitlab.com/lifegoeson-libs/pkg-logging/logger"
 )
 

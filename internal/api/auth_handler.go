@@ -4,9 +4,10 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/techinsight/be-techinsights-notification-service/configs"
-	"github.com/techinsight/be-techinsights-notification-service/pkg/centrifugo"
-	"github.com/techinsight/be-techinsights-notification-service/pkg/httputil"
+	"be-modami-no-service/config"
+	"be-modami-no-service/pkg/centrifugo"
+	"be-modami-no-service/pkg/httputil"
+
 	"gitlab.com/lifegoeson-libs/pkg-logging/logger"
 )
 
@@ -20,7 +21,7 @@ func NewAuthHandler(cfg *configs.Config) *AuthHandler {
 }
 
 func (h *AuthHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("POST /api/v1/auth/centrifugo-token", h.CentrifugoToken)
+	mux.HandleFunc("POST /v1/noti-services/auth/centrifugo-token", h.CentrifugoToken)
 }
 
 // CentrifugoToken godoc

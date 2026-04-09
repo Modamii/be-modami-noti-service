@@ -1,7 +1,8 @@
 // WS Gateway: Centrifugo proxy handler for connect/subscribe/publish callbacks.
 //
 // Architecture:
-//   Client ──WebSocket──▶ Centrifugo ──proxy HTTP──▶ this service
+//
+//	Client ──WebSocket──▶ Centrifugo ──proxy HTTP──▶ this service
 //
 // Centrifugo delegates auth, channel authorization, and publish validation
 // to this service via its proxy protocol. This avoids a double-hop WebSocket
@@ -17,11 +18,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/techinsight/be-techinsights-notification-service/configs"
-	"github.com/techinsight/be-techinsights-notification-service/internal/gateway"
-	"github.com/techinsight/be-techinsights-notification-service/pkg/centrifugo"
-	"github.com/techinsight/be-techinsights-notification-service/pkg/health"
-	"github.com/techinsight/be-techinsights-notification-service/pkg/httputil"
+	"be-modami-no-service/config"
+	"be-modami-no-service/internal/gateway"
+	"be-modami-no-service/pkg/centrifugo"
+	"be-modami-no-service/pkg/health"
+	"be-modami-no-service/pkg/httputil"
+
 	"gitlab.com/lifegoeson-libs/pkg-logging/logger"
 )
 
