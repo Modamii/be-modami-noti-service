@@ -21,7 +21,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /bin/worker-dispatch .
 
 FROM gcr.io/distroless/static:nonroot
 COPY --from=builder /bin/worker-dispatch /worker-dispatch
-COPY --from=builder /app/configs/config.yaml /app/configs/config.yaml
+COPY --from=builder /app/config/config.yaml /app/config/config.yaml
 USER nonroot:nonroot
-EXPOSE 9090
+EXPOSE 7073
 ENTRYPOINT ["/worker-dispatch"]

@@ -21,7 +21,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /bin/ingest ./cmd/inge
 
 FROM gcr.io/distroless/static:nonroot
 COPY --from=builder /bin/ingest /ingest
-COPY --from=builder /app/configs/config.yaml /app/configs/config.yaml
+COPY --from=builder /app/config/config.yaml /app/config/config.yaml
 USER nonroot:nonroot
-EXPOSE 8082
+EXPOSE 7071
 ENTRYPOINT ["/ingest"]

@@ -4,12 +4,13 @@ stages:
   - release
 
 variables:
-  DOCKER_IMAGE: "lifegoeson34/be-modami-noti-service"
+  DOCKER_REGISTRY: "lifegoeson34"
+  DOCKER_REPO: "be-modami-noti-service"
   DOCKER_DRIVER: overlay2
   DOCKER_TLS_CERTDIR: ""
   GOFLAGS: "-mod=mod"
 
-# ─── BUILD & TEST ────────────────────────────────────────────────────────────
+# ─── BUILD & TEST ─────────────────────────────────────────────────────────────
 
 build:
   stage: build
@@ -22,13 +23,14 @@ build:
     - go env -w GONOPROXY=gitlab.com/lifegoeson-libs/*
   script:
     - go mod download
+    - go vet ./...
     - go build -v ./...
     - go test -v ./...
   rules:
     - if: $CI_COMMIT_BRANCH == "master"
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
 
-# ─── SECURITY ────────────────────────────────────────────────────────────────
+# ─── SECURITY ─────────────────────────────────────────────────────────────────
 
 trivy-scan:
   stage: security
@@ -36,7 +38,7 @@ trivy-scan:
     name: ghcr.io/aquasecurity/trivy:latest
     entrypoint: [""]
   script:
-    - trivy fs --format table -o fs-report.json --exit-code 0 .
+    - trivy fs --format json -o fs-report.json --exit-code 0 .
   artifacts:
     name: trivy-report
     paths:
@@ -91,7 +93,7 @@ gitleaks-scan:
     - if: $CI_COMMIT_BRANCH == "master"
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
 
-# ─── RELEASE ─────────────────────────────────────────────────────────────────
+# ─── RELEASE ──────────────────────────────────────────────────────────────────
 
 docker-build-push:
   stage: release
@@ -111,20 +113,23 @@ docker-build-push:
     - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
   script:
     - IMAGE_TAG="v1.0.$(echo $CI_COMMIT_SHA | cut -c1-7)"
-    - echo "Building image $DOCKER_IMAGE:$IMAGE_TAG"
+    - echo "Building all services with tag $IMAGE_TAG"
     - |
-      DOCKER_BUILDKIT=1 docker build \
-        --build-arg BUILDPLATFORM=linux/amd64 \
-        --build-arg TARGETOS=linux \
-        --build-arg TARGETARCH=amd64 \
-        --secret id=gitlab_username,env=GITLAB_CI_USERNAME \
-        --secret id=gitlab_token,env=CI_JOB_TOKEN \
-        -t "$DOCKER_IMAGE:latest" \
-        -t "$DOCKER_IMAGE:$IMAGE_TAG" \
-        .
-    - docker push "$DOCKER_IMAGE:latest"
-    - docker push "$DOCKER_IMAGE:$IMAGE_TAG"
-    - echo "Pushed $DOCKER_IMAGE:$IMAGE_TAG"
+      for SERVICE in api ingest ws-gateway worker-dispatch worker-push; do
+        echo "──────────────────────────────────────"
+        echo "Building: $SERVICE"
+        FULL_IMAGE="$DOCKER_REGISTRY/$DOCKER_REPO-$SERVICE"
+        DOCKER_BUILDKIT=1 docker build \
+          --secret id=gitlab_username,env=GITLAB_CI_USERNAME \
+          --secret id=gitlab_token,env=CI_JOB_TOKEN \
+          -f build/docker/Dockerfile.$SERVICE \
+          -t "$FULL_IMAGE:latest" \
+          -t "$FULL_IMAGE:$IMAGE_TAG" \
+          .
+        docker push "$FULL_IMAGE:latest"
+        docker push "$FULL_IMAGE:$IMAGE_TAG"
+        echo "Pushed $FULL_IMAGE:$IMAGE_TAG"
+      done
   rules:
     - if: $CI_COMMIT_BRANCH == "master"
   needs:

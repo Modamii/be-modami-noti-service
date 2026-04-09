@@ -21,7 +21,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /bin/worker-push ./cmd
 
 FROM gcr.io/distroless/static:nonroot
 COPY --from=builder /bin/worker-push /worker-push
-COPY --from=builder /app/configs/config.yaml /app/configs/config.yaml
+COPY --from=builder /app/config/config.yaml /app/config/config.yaml
 USER nonroot:nonroot
-EXPOSE 9091
+EXPOSE 7074
 ENTRYPOINT ["/worker-push"]

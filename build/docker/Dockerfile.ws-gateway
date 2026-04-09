@@ -17,11 +17,11 @@ RUN --mount=type=secret,id=gitlab_username,required=false \
     fi; \
     go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /bin/api ./cmd/api
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /bin/ws-gateway ./cmd/ws-gateway
 
 FROM gcr.io/distroless/static:nonroot
-COPY --from=builder /bin/api /api
+COPY --from=builder /bin/ws-gateway /ws-gateway
 COPY --from=builder /app/config/config.yaml /app/config/config.yaml
 USER nonroot:nonroot
-EXPOSE 7070
-ENTRYPOINT ["/api"]
+EXPOSE 7072
+ENTRYPOINT ["/ws-gateway"]

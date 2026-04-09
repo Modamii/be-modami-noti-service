@@ -16,7 +16,6 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     if [ -f /run/secrets/gitlab_username ] && [ -f /run/secrets/gitlab_token ]; then \
         GITLAB_USERNAME="$(cat /run/secrets/gitlab_username)"; \
         GITLAB_TOKEN="$(cat /run/secrets/gitlab_token)"; \
-        echo "Configuring GitLab private repo access"; \
         printf "machine gitlab.com\nlogin %s\npassword %s\n" \
           "$GITLAB_USERNAME" "$GITLAB_TOKEN" > ~/.netrc; \
         chmod 600 ~/.netrc; \
@@ -31,13 +30,14 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 COPY . .
 
+ARG SERVICE=api
+
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build \
     -ldflags="-w -s" \
-    -o main ./cmd/api
+    -o main ./cmd/$SERVICE
 
-    
 # Final stage
 FROM alpine:latest
 
@@ -49,16 +49,16 @@ RUN addgroup -g 1001 -S appgroup && \
 WORKDIR /app
 
 COPY --from=builder /app/main .
-COPY --from=builder /app/configs ./configs
-COPY --from=builder /app/.env* ./
+COPY --from=builder /app/config ./config
 
 RUN chown -R appuser:appgroup /app
 
 USER appuser
 
-EXPOSE 8080
+ARG PORT=7070
+EXPOSE $PORT
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:$PORT/healthz || exit 1
 
 CMD ["./main"]
