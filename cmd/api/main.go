@@ -27,7 +27,7 @@ import (
 
 	"gitlab.com/lifegoeson-libs/pkg-logging/logger"
 
-	_ "be-modami-no-service/docs"
+	"be-modami-no-service/docs"
 
 	httpSwagger "github.com/swaggo/http-swagger"
 )
@@ -39,6 +39,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("config: %v", err)
 	}
+
+	docs.SwaggerInfo.Host = cfg.App.SwaggerHost
 
 	loggingCfg := cfg.ToLoggingConfig()
 	if err := logger.Init(loggingCfg); err != nil {

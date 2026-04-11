@@ -32,6 +32,7 @@ type AppConfig struct {
 	Debug           bool     `mapstructure:"debug"`
 	Port            int      `mapstructure:"port"`
 	Host            string   `mapstructure:"host"`
+	SwaggerHost     string   `mapstructure:"swagger_host"`
 	ShutdownTimeout string   `mapstructure:"shutdown_timeout"`
 	ReadTimeout     string   `mapstructure:"read_timeout"`
 	WriteTimeout    string   `mapstructure:"write_timeout"`
@@ -236,6 +237,7 @@ func setDefaults() {
 	viper.SetDefault("app.version", "1.0.0")
 	viper.SetDefault("app.environment", "development")
 	viper.SetDefault("app.port", 7070)
+	viper.SetDefault("app.swagger_host", "localhost:7070")
 	viper.SetDefault("app.shutdown_timeout", "30s")
 	viper.SetDefault("app.read_timeout", "30s")
 	viper.SetDefault("app.write_timeout", "30s")
