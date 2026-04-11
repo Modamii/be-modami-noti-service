@@ -100,7 +100,7 @@ func main() {
 		httputil.Recovery,
 		httputil.RequestID,
 		httputil.RequestLogging,
-		httputil.CORS(cfg.App.CORSOrigins),
+		httputil.CORS(cfg.App.AllowedOrigins),
 	)
 
 	srv := &http.Server{

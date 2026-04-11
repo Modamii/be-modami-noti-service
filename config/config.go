@@ -37,7 +37,8 @@ type AppConfig struct {
 	ReadTimeout     string   `mapstructure:"read_timeout"`
 	WriteTimeout    string   `mapstructure:"write_timeout"`
 	IdleTimeout     string   `mapstructure:"idle_timeout"`
-	CORSOrigins     []string `mapstructure:"cors_origins"`
+	AllowedOrigins   []string `mapstructure:"allowed_origins"`
+	AllowCredentials bool     `mapstructure:"allow_credentials"`
 }
 
 func (a *AppConfig) ParseShutdownTimeout() time.Duration {
@@ -242,7 +243,8 @@ func setDefaults() {
 	viper.SetDefault("app.read_timeout", "30s")
 	viper.SetDefault("app.write_timeout", "30s")
 	viper.SetDefault("app.idle_timeout", "120s")
-	viper.SetDefault("app.cors_origins", []string{"*"})
+	viper.SetDefault("app.allowed_origins", []string{"http://localhost:5173", "http://localhost:3000", "http://localhost:8080", "http://localhost:8081"})
+	viper.SetDefault("app.allow_credentials", true)
 
 	viper.SetDefault("mongodb.uri", "mongodb://localhost:27017")
 	viper.SetDefault("mongodb.database", "notifications")
