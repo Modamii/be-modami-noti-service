@@ -1,280 +1,206 @@
 # WebSocket & Centrifugo
 
-How clients establish real-time connections, how authentication works, and how notifications are delivered over WebSocket.
+## Architecture: 1 Centrifugo, 2 Namespaces
 
-## Overview
-
-Centrifugo is a standalone WebSocket/SSE server. This service does **not** handle WebSocket connections directly. Instead:
-
-- Clients connect directly to Centrifugo (`:8000`)
-- Centrifugo proxies auth decisions to `ws-gateway` (`:7072`)
-- `worker-dispatch` publishes messages to Centrifugo via HTTP API
+One Centrifugo instance is shared between the notification service and the chat service. Clients open **a single WebSocket connection** and subscribe to channels from both namespaces.
 
 ```
-Client ──WebSocket──▶ Centrifugo (:8000)
-                           │  proxy callbacks
-                           ▼
-                     ws-gateway (:7072)
-                     POST /centrifugo/connect
-                     POST /centrifugo/subscribe
-                     POST /centrifugo/publish
-
-worker-dispatch ──HTTP──▶ Centrifugo POST /api/publish
+                        ┌─────────────────────────────────┐
+                        │         Centrifugo               │
+                        │                                 │
+  Client ──── 1 WS ────▶│  noti:user:{id}    (noti ns)   │
+                        │  chat:room:{id}    (chat ns)    │
+                        └────────────┬────────────────────┘
+                                     │ proxy callbacks (per namespace)
+                     ┌───────────────┴──────────────────┐
+                     ▼                                  ▼
+          noti-ws-gateway :7072              chat-ws-gateway
+          (this service)                    (chat service)
 ```
 
-## Full Connection Flow
+Why 1 Centrifugo instead of 2?
+- Client opens only 1 WebSocket — no double handshake, no double JWT
+- Single auth flow — 1 token issued by auth service
+- No duplicate connection management
+- Split only when: different teams own each service, wildly different scale needs, or strict security isolation is required
 
-### Step 1 — Client requests a connection token
-
-```
-Client  ──POST /v1/noti-services/auth/centrifugo-token──▶  api (:7070)
-        { "user_id": "abc123" }
-
-api  ──▶  GenerateConnectionToken(hmacSecret, userID, ttl)
-          HS256 JWT: { sub: "abc123", iat: ..., exp: iat+3600 }
-
-api  ──▶  Client: { "data": { "token": "<jwt>" } }
-```
-
-The JWT is signed with `centrifugo.hmac_secret` (configured in `config/config.yaml`). Centrifugo is configured with the same secret under `token_hmac_secret_key`.
-
-### Step 2 — Client connects to Centrifugo
-
-The client passes the JWT in the connection request. Centrifugo validates the token signature itself, then proxies the connect request to `ws-gateway`:
-
-```
-Client  ──WebSocket connect──▶  Centrifugo
-                                     │
-                  POST /centrifugo/connect
-                  {
-                    "client": "client-id",
-                    "token":  "<jwt>",
-                    "data":   {}
-                  }
-                                     │
-                                     ▼
-                               ws-gateway
-```
-
-**ws-gateway connect handler** (`internal/gateway/handler.go`):
-
-1. Parses the JWT from `ProxyConnectRequest.Token`
-2. Validates signature with HMAC secret
-3. Extracts `sub` (user ID) from claims
-4. Returns `ProxyConnectResult`:
-   ```json
-   {
-     "result": {
-       "user": "abc123",
-       "channels": ["notifications:user:abc123"]
-     }
-   }
-   ```
-
-The `channels` array auto-subscribes the user to their personal notification channel on connect.
-
-### Step 3 — Centrifugo proxies subscribe request
-
-If the client explicitly subscribes to a channel (or the auto-subscription from step 2 triggers):
-
-```
-Centrifugo  ──POST /centrifugo/subscribe──▶  ws-gateway
-{
-  "client":  "client-id",
-  "user":    "abc123",
-  "channel": "notifications:user:abc123"
-}
-```
-
-**ws-gateway subscribe handler**:
-
-| Channel pattern | Policy |
-|----------------|--------|
-| `notifications:user:{id}` | Allow only if `user == id` |
-| `notifications:topic:*` | Allow all (public topic channels) |
-| anything else | Deny (403) |
-
-```json
-// Allowed
-{ "result": {} }
-
-// Denied
-{ "error": { "code": 403, "message": "forbidden" } }
-```
-
-### Step 4 — Notification delivered via WebSocket
-
-When a notification is triggered:
-
-```
-worker-dispatch  ──POST /api/publish──▶  Centrifugo
-{
-  "channel": "notifications:user:abc123",
-  "data": {
-    "event":   "content_published",
-    "payload": {
-      "notification_id": "notif-xyz",
-      "title": "New post from Alice",
-      "body":  "Check out this article",
-      "link":  "/posts/post-1"
-    }
-  }
-}
-
-Centrifugo  ──WebSocket push──▶  Client (abc123)
-```
-
-The client receives the raw `data` object over the WebSocket connection.
+---
 
 ## Channel Naming
 
-```go
-// pkg/centrifugo/channels.go
-func ChannelFromRoomID(roomID string) string {
-    return "notifications:" + roomID
-}
-```
+Centrifugo uses `namespace:channel` pattern:
 
-| Room ID | Centrifugo Channel |
-|---------|-------------------|
-| `user:abc123` | `notifications:user:abc123` |
-| `topic:global` | `notifications:topic:global` |
+| Channel | Namespace | Who subscribes | Who publishes |
+|---------|-----------|----------------|---------------|
+| `noti:user:{userID}` | `noti` | User (personal) | noti-service |
+| `noti:topic:{topic}` | `noti` | Anyone | noti-service (broadcast) |
+| `chat:room:{roomID}` | `chat` | Room members | chat-service |
 
-Each user's personal channel is `notifications:user:{userID}`. This is the channel that receives all in-app notifications for that user.
+---
 
-## Token Structure
-
-### Connection Token
+## Namespace Config
 
 ```json
 {
-  "sub": "abc123",
-  "iat": 1712600000,
-  "exp": 1712603600
+  "namespaces": [
+    {
+      "name": "noti",
+      "presence": false,
+      "history_size": 20,
+      "history_ttl": "7d",
+      "recover": true,
+      "proxy_subscribe_endpoint": "http://noti-ws-gateway:7072/centrifugo/subscribe",
+      "proxy_publish_endpoint":   "http://noti-ws-gateway:7072/centrifugo/publish"
+    },
+    {
+      "name": "chat",
+      "presence": true,
+      "join_leave": true,
+      "history_size": 100,
+      "history_ttl": "24h",
+      "recover": true,
+      "proxy_subscribe_endpoint": "http://chat-ws-gateway:PORT/centrifugo/subscribe",
+      "proxy_publish_endpoint":   "http://chat-ws-gateway:PORT/centrifugo/publish"
+    }
+  ]
 }
 ```
 
-Signed with `HS256`. TTL is configurable via `centrifugo.token_ttl` (default: 3600 seconds).
+- `noti` — no presence (no need to know who's online), long history TTL for missed notifications
+- `chat` — presence enabled (know who's in the room), join/leave events, shorter history
 
-### Subscription Token (optional)
+---
 
-For private channel subscriptions, a subscription token can be generated separately:
+## Full Connection Flow
 
-```go
-// pkg/centrifugo/token.go
-GenerateSubscriptionToken(secret, userID, channel, ttl)
-// JWT adds: { "channel": "notifications:user:abc123" }
+```
+1. Client → GET /auth/centrifugo-token  (noti-service API)
+   ← { "token": "eyJ..." }            (JWT signed with HMAC secret)
+
+2. Client → Centrifugo WS connect
+   sends:  { "token": "eyJ..." }
+   Centrifugo → POST /centrifugo/connect  (noti-ws-gateway)
+   ← { "result": { "user": "user-123", "channels": ["noti:user:user-123"] } }
+   Client is now connected + auto-subscribed to noti channel
+
+3. Client → subscribe "chat:room:room-456"
+   Centrifugo → POST /centrifugo/subscribe  (chat-ws-gateway)
+   ← { "result": {} }   (chat service validates membership)
+
+4. Server publishes notification:
+   noti-service → POST centrifugo/api  { "method": "publish", "params": { "channel": "noti:user:user-123", ... } }
+   Centrifugo → client receives message on WS
+
+5. User sends chat message:
+   chat-service → POST centrifugo/api  { "method": "publish", "params": { "channel": "chat:room:room-456", ... } }
+   Centrifugo → all subscribers in room receive message on same WS connection
 ```
 
-Currently, subscriptions are authorized via the proxy callback instead of subscription tokens.
+---
 
-## Publish Rate Limiting
+## JWT Token
 
-When a **client** attempts to publish to a channel (client-side publish), `ws-gateway` enforces a per-user token bucket:
-
-```go
-// internal/gateway/ratelimit.go
-Rate:  10 events/second
-Burst: 20 events
-```
-
-If exceeded:
-```json
-{ "error": { "code": 429, "message": "rate limit exceeded" } }
-```
-
-Server-side publishes (from `worker-dispatch`) are not rate-limited.
-
-## Centrifugo Configuration
-
-### Key settings (`deploy/centrifugo/config.json`)
+Issued by `POST /v1/noti-services/auth/centrifugo-token`:
 
 ```json
 {
-  "token_hmac_secret_key": "<same as centrifugo.hmac_secret>",
-  "api_key":               "<same as centrifugo.api_key>",
-  "proxy_connect_endpoint":   "http://ws-gateway:7072/centrifugo/connect",
-  "proxy_subscribe_endpoint": "http://ws-gateway:7072/centrifugo/subscribe",
-  "proxy_publish_endpoint":   "http://ws-gateway:7072/centrifugo/publish",
-  "proxy_connect_timeout":    "5s",
-  "proxy_subscribe_timeout":  "3s",
-  "proxy_publish_timeout":    "3s",
-  "namespaces": [{
-    "name": "notifications",
-    "presence": true,
-    "history_size": 100,
-    "history_ttl": "300s",
-    "recover": true
-  }]
+  "sub": "user-123",
+  "exp": 1234567890,
+  "iat": 1234564290
 }
 ```
 
-### Environment variables (production)
+- Signed with HMAC-SHA256 using `centrifugo.hmac_secret`
+- Same secret shared between noti-service and Centrifugo
+- Chat service does NOT need to issue its own token — same JWT works for both namespaces
 
-| Variable | Description |
-|----------|-------------|
-| `CENTRIFUGO_TOKEN_HMAC_SECRET_KEY` | JWT signing secret (must match service config) |
-| `CENTRIFUGO_API_KEY` | Server-side API key for publishing |
-| `CENTRIFUGO_ADMIN_PASSWORD` | Admin UI password |
-| `CENTRIFUGO_ADMIN_SECRET` | Admin API secret |
-| `CENTRIFUGO_ALLOWED_ORIGINS` | Comma-separated allowed WebSocket origins |
+---
 
-## Client Integration (JavaScript)
+## Proxy Routing
 
-```javascript
+Centrifugo routes proxy callbacks per namespace:
+
+| Event | Endpoint | Handler |
+|-------|----------|---------|
+| Connect (all namespaces) | `noti-ws-gateway:7072/centrifugo/connect` | noti-service |
+| Subscribe `noti:*` | `noti-ws-gateway:7072/centrifugo/subscribe` | noti-service |
+| Publish `noti:*` | `noti-ws-gateway:7072/centrifugo/publish` | noti-service |
+| Subscribe `chat:*` | `chat-ws-gateway:PORT/centrifugo/subscribe` | chat-service |
+| Publish `chat:*` | `chat-ws-gateway:PORT/centrifugo/publish` | chat-service |
+
+Connect proxy is handled by noti-service because it only validates JWT — no service-specific logic.
+
+---
+
+## Subscribe Access Rules (noti namespace)
+
+| Channel | Rule |
+|---------|------|
+| `noti:user:{X}` | Only user with `sub == X` can subscribe |
+| `noti:topic:*` | Any authenticated user |
+
+Chat subscribe rules are enforced by the chat service.
+
+---
+
+## Rate Limiting
+
+Client-initiated publishes to `noti:*` are rate-limited per user:
+- 10 publishes/second, burst of 20
+
+Server-initiated publishes (via Centrifugo HTTP API) are not rate-limited here.
+
+---
+
+## JavaScript Client Example
+
+```js
 import { Centrifuge } from 'centrifuge';
 
-// 1. Get connection token from API
-const { data: { token } } = await api.post('/v1/noti-services/auth/centrifugo-token', {
-  user_id: currentUser.id
+const token = await fetch('/v1/noti-services/auth/centrifugo-token', {
+  method: 'POST',
+  body: JSON.stringify({ user_id: 'user-123' }),
+}).then(r => r.json()).then(r => r.data.token);
+
+const centrifuge = new Centrifuge('wss://centrifugo.app.modami.com/connection/websocket', {
+  data: { token }   // sent in connect proxy request
 });
 
-// 2. Connect to Centrifugo
-const centrifuge = new Centrifuge('ws://localhost:8000/connection/websocket', { token });
-
-// 3. Subscribe to personal notification channel
-const sub = centrifuge.newSubscription(`notifications:user:${currentUser.id}`);
-
-sub.on('publication', (ctx) => {
-  const { event, payload } = ctx.data;
-  console.log('Notification received:', event, payload);
-  // Update UI: show toast, update notification bell count, etc.
+// Subscribe to personal notifications (auto-subscribed on connect too)
+const notiSub = centrifuge.newSubscription('noti:user:user-123');
+notiSub.on('publication', ({ data }) => {
+  console.log('notification:', data);
 });
+notiSub.subscribe();
 
-sub.subscribe();
+// Subscribe to a chat room
+const chatSub = centrifuge.newSubscription('chat:room:room-456');
+chatSub.on('publication', ({ data }) => {
+  console.log('chat message:', data);
+});
+chatSub.subscribe();
+
 centrifuge.connect();
 ```
 
-## Sequence Diagram — Full WebSocket Auth Flow
+---
 
-```mermaid
-sequenceDiagram
-  participant CL as Client
-  participant API as api (:7070)
-  participant CF as Centrifugo (:8000)
-  participant GW as ws-gateway (:7072)
-  participant WD as worker-dispatch
+## Local Development
 
-  CL->>API: POST /v1/noti-services/auth/centrifugo-token
-  API-->>CL: { token: "eyJ..." }
+```bash
+# Start Centrifugo with local config (both namespaces)
+docker run -d --name centrifugo \
+  -p 8000:8000 -p 10000:10000 \
+  -v $(pwd)/deploy/centrifugo/config.local.json:/centrifugo/config.json \
+  -e CENTRIFUGO_HMAC_SECRET=local-secret \
+  -e CENTRIFUGO_API_KEY=local-api-key \
+  -e CENTRIFUGO_ADMIN_PASSWORD=admin \
+  -e CENTRIFUGO_ADMIN_SECRET=admin-secret \
+  centrifugo/centrifugo:v5 centrifugo --config=config.json
 
-  CL->>CF: WebSocket connect (token)
-  CF->>GW: POST /centrifugo/connect { token }
-  GW->>GW: Validate JWT, extract userID
-  GW-->>CF: { user: "abc", channels: ["notifications:user:abc"] }
-  CF-->>CL: Connected + auto-subscribed
+# Run noti ws-gateway
+make run-ws-gateway   # :7072
 
-  Note over CL,CF: Notification triggered elsewhere
-
-  WD->>CF: POST /api/publish (channel, data)
-  CF-->>CL: WebSocket message { event, payload }
+# Admin UI
+open http://localhost:10000
 ```
-
-## Proxy Error Codes
-
-| Code | Meaning |
-|------|---------|
-| 401 | Unauthorized — invalid or missing token |
-| 403 | Forbidden — channel access denied |
-| 429 | Rate limit exceeded |
-| 500 | Internal error in proxy handler |

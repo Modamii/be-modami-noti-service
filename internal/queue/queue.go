@@ -18,7 +18,7 @@ func New(client *redis.Client) *Queue {
 }
 
 // Enqueue pushes a JSON payload to the list.
-func (q *Queue) Enqueue(ctx context.Context, key string, payload interface{}) error {
+func (q *Queue) Enqueue(ctx context.Context, key string, payload any) error {
 	b, err := json.Marshal(payload)
 	if err != nil {
 		return err
@@ -34,6 +34,10 @@ func (q *Queue) Consume(ctx context.Context, key string, timeout time.Duration, 
 			return ctx.Err()
 		default:
 			result, err := q.client.BRPop(ctx, timeout, key).Result()
+			if err == redis.Nil {
+				// timeout — no message, loop again
+				continue
+			}
 			if err != nil {
 				return err
 			}

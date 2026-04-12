@@ -6,6 +6,7 @@ Real-time notification service built on Go, Kafka, Redis, MongoDB, and Centrifug
 
 | File | Description |
 |------|-------------|
+| [services.md](services.md) | Chức năng từng service, full flow FE↔WS↔Kafka |
 | [architecture.md](architecture.md) | System overview, components, ports, design patterns |
 | [notification-flow.md](notification-flow.md) | Event ingestion → processing → dispatch pipeline |
 | [websocket-centrifugo.md](websocket-centrifugo.md) | WebSocket auth, Centrifugo proxy, channel model |
@@ -40,6 +41,6 @@ make swagger
 | api | `:7070` | REST API |
 | ingest | `:7071` | Kafka consumer + HTTP webhook |
 | ws-gateway | `:7072` | Centrifugo proxy callbacks |
-| worker-dispatch | `:7070` | WebSocket fanout worker |
-| worker-push | `:7071` | Push notification worker |
+| worker-dispatch | `:7073` | WebSocket fanout worker |
+| worker-push | `:7074` | Push notification worker |
 | Centrifugo | `:8000` | WebSocket server |

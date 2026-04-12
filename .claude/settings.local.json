@@ -14,7 +14,10 @@
       "Bash(ls:*)",
       "Bash(cat:*)",
       "Bash(\\\\ git:*)",
-      "Bash(echo:*)"
+      "Bash(echo:*)",
+      "Bash(docker ps:*)",
+      "Bash(\\\\ curl:*)",
+      "Bash(curl:*)"
     ]
   }
 }

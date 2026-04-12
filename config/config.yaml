@@ -5,9 +5,9 @@ app:
     version: "1.0.0"
     environment: "development"
     debug: true
-    port: 8089
+    port: 8080
     host: "localhost"
-    swagger_host: "localhost:8089"
+    swagger_host: "localhost:7070"
     shutdown_timeout: 30s
     read_timeout: 30s
     write_timeout: 30s
@@ -75,8 +75,8 @@ fcm:
 
 centrifugo:
   api_url: "http://localhost:8000/api"
-  api_key: ""      # set via CENTRIFUGO_API_KEY env var
-  hmac_secret: ""  # set via CENTRIFUGO_HMAC_SECRET env var
+  api_key: "centrifugo-api-key"      # set via CENTRIFUGO_API_KEY env var
+  hmac_secret: "local-dev-token-secret"  # set via CENTRIFUGO_HMAC_SECRET env var
   token_ttl: 3600
 
 observability:

@@ -1,15 +1,39 @@
 version: "3.9"
 
 services:
+  # ── Infrastructure ──────────────────────────────────────────────────────────
+
+  mongo:
+    image: mongo:6
+    container_name: mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
   centrifugo:
     image: centrifugo/centrifugo:v5
     container_name: centrifugo
     command: centrifugo -c /centrifugo/config.json
     ports:
       - "8000:8000"
-      - "10000:10000"
+      - "10000:10000"   # Admin UI
     volumes:
       - ./deploy/centrifugo/config.local.json:/centrifugo/config.json:ro
-    env_file:
-      - .env
+    environment:
+      CENTRIFUGO_HMAC_SECRET: "local-dev-token-secret"
+      CENTRIFUGO_API_KEY: "centrifugo-api-key"
+      CENTRIFUGO_ADMIN_PASSWORD: "admin-password"
+      CENTRIFUGO_ADMIN_SECRET: "admin-secret"
     restart: unless-stopped
+
+volumes:
+  mongo_data:

@@ -12,7 +12,8 @@ import (
 	"gitlab.com/lifegoeson-libs/pkg-logging/logger"
 )
 
-// ProxyHandler handles Centrifugo proxy callbacks: connect, subscribe, publish.
+// ProxyHandler handles Centrifugo proxy callbacks for the "noti" namespace only.
+// The "chat" namespace is proxied to the chat service's own ws-gateway.
 type ProxyHandler struct {
 	hmacSecret     string
 	publishLimiter *RateLimiter
@@ -35,7 +36,8 @@ func (h *ProxyHandler) RegisterRoutes(mux *http.ServeMux) {
 }
 
 // Connect validates the client's JWT and returns the user ID.
-// Centrifugo calls this when a client opens a WebSocket connection.
+// Centrifugo calls this on every new WebSocket connection (shared across namespaces).
+// On connect, the user is auto-subscribed to their personal noti channel.
 func (h *ProxyHandler) Connect(w http.ResponseWriter, r *http.Request) {
 	var req centrifugo.ProxyConnectRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -43,7 +45,6 @@ func (h *ProxyHandler) Connect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Extract JWT from the connect data
 	var connectData struct {
 		Token string `json:"token"`
 	}
@@ -69,23 +70,22 @@ func (h *ProxyHandler) Connect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Auto-subscribe user to their personal notification channel
-	personalChannel := centrifugo.ChannelFromRoomID("user:" + userID)
-
 	expireAt := int64(0)
 	if exp, ok := claims["exp"].(float64); ok {
 		expireAt = int64(exp)
 	}
 
+	// Auto-subscribe to personal noti channel: "noti:user:{userID}"
+	// Client separately subscribes to chat channels after connect.
 	writeProxyResult(w, &centrifugo.ProxyConnectResult{
 		User:     userID,
 		ExpireAt: expireAt,
-		Channels: []string{personalChannel},
+		Channels: []string{centrifugo.NotiChannel(userID)},
 	})
 }
 
-// Subscribe checks whether the user is allowed to subscribe to the requested channel.
-// Channel format: "notifications:user:{userID}" — user can only subscribe to their own channel.
+// Subscribe checks whether the user is allowed to subscribe to the requested noti channel.
+// Only called for "noti:*" channels — chat namespace has its own proxy in the chat service.
 func (h *ProxyHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
 	var req centrifugo.ProxySubscribeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -93,7 +93,7 @@ func (h *ProxyHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !isChannelAllowed(req.User, req.Channel) {
+	if !isNotiChannelAllowed(req.User, req.Channel) {
 		writeProxyError(w, centrifugo.ProxyErrorForbidden, "not allowed to subscribe to this channel")
 		return
 	}
@@ -101,8 +101,8 @@ func (h *ProxyHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
 	writeProxyResult(w, &centrifugo.ProxySubscribeResult{})
 }
 
-// Publish rate-limits client-side publishes.
-// Most notifications are server-initiated, but this guards against abuse if client publish is enabled.
+// Publish rate-limits client-side publishes to noti channels.
+// Notifications are server-initiated; this guards against abuse.
 func (h *ProxyHandler) Publish(w http.ResponseWriter, r *http.Request) {
 	var req centrifugo.ProxyPublishRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -115,7 +115,7 @@ func (h *ProxyHandler) Publish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !isChannelAllowed(req.User, req.Channel) {
+	if !isNotiChannelAllowed(req.User, req.Channel) {
 		writeProxyError(w, centrifugo.ProxyErrorForbidden, "not allowed to publish to this channel")
 		return
 	}
@@ -123,20 +123,16 @@ func (h *ProxyHandler) Publish(w http.ResponseWriter, r *http.Request) {
 	writeProxyResult(w, &centrifugo.ProxyPublishResult{})
 }
 
-// isChannelAllowed checks if a user can access the given channel.
-// Rule: "notifications:user:{userID}" — only the owner can subscribe/publish.
-func isChannelAllowed(userID, channel string) bool {
-	// Personal notification channel
-	expected := centrifugo.ChannelFromRoomID("user:" + userID)
-	if channel == expected {
+// isNotiChannelAllowed checks noti namespace access rules:
+//   - "noti:user:{userID}"  — only the owner
+//   - "noti:topic:*"        — public broadcast channels
+func isNotiChannelAllowed(userID, channel string) bool {
+	if channel == centrifugo.NotiChannel(userID) {
 		return true
 	}
-
-	// Public/topic channels (e.g. "notifications:topic:announcements") are open
-	if strings.HasPrefix(channel, "notifications:topic:") {
+	if strings.HasPrefix(channel, centrifugo.NamespaceNoti+":topic:") {
 		return true
 	}
-
 	return false
 }
 
@@ -157,7 +153,7 @@ func (h *ProxyHandler) parseJWT(tokenStr string) (jwt.MapClaims, error) {
 	return claims, nil
 }
 
-func writeProxyResult(w http.ResponseWriter, result interface{}) {
+func writeProxyResult(w http.ResponseWriter, result any) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(centrifugo.ProxyResponse{Result: result})
 }
