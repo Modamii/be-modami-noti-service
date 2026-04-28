@@ -17,7 +17,15 @@
       "Bash(echo:*)",
       "Bash(docker ps:*)",
       "Bash(\\\\ curl:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(BASE=/Users/lifegoeson/go/pkg/mod/gitlab.com/lifegoeson-libs/pkg-gokit@v1.0.1)",
+      "Read(//Users/lifegoeson/Documents/ROOT/sources/modami/be-modami-noti-service/**)",
+      "Read(//Users/lifegoeson/Documents/ROOT/sources/modami/be-modami-noti-service/$BASE/**)",
+      "Read(//Users/lifegoeson/Documents/ROOT/sources/modami/be-modami-noti-service/$BASE/redis/**)",
+      "Read(//Users/lifegoeson/Documents/ROOT/sources/modami/be-modami-noti-service/$BASE/mongodb/**)",
+      "Read(//Users/lifegoeson/Documents/ROOT/sources/modami/be-modami-noti-service/$BASE/kafka/**)",
+      "Bash(do echo:*)",
+      "Bash(done)"
     ]
   }
 }
