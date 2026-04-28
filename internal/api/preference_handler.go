@@ -6,7 +6,8 @@ import (
 
 	"be-modami-no-service/internal/domain"
 	"be-modami-no-service/internal/store"
-	"be-modami-no-service/pkg/httputil"
+
+	"gitlab.com/lifegoeson-libs/pkg-gokit/response"
 )
 
 // PreferenceHandler groups preference-related HTTP handlers.
@@ -29,21 +30,21 @@ func (h *PreferenceHandler) RegisterRoutes(mux *http.ServeMux) {
 // @Tags preferences
 // @Produce json
 // @Param userId path string true "User ID"
-// @Success 200 {object} httputil.Response{data=domain.Preference}
-// @Failure 500 {object} httputil.Response
+// @Success 200 {object} response.Response{data=domain.Preference}
+// @Failure 500 {object} response.Response
 // @Router /users/{userId}/preferences [get]
 func (h *PreferenceHandler) Get(w http.ResponseWriter, r *http.Request) {
 	userID := r.PathValue("userId")
 	if userID == "" {
-		httputil.ErrBadRequest(w, "missing userId")
+		response.BadRequest(w, "missing userId")
 		return
 	}
 	pref, err := h.store.Get(r.Context(), userID)
 	if err != nil {
-		httputil.ErrInternal(w, "failed to get preferences")
+		response.InternalError(w, "failed to get preferences")
 		return
 	}
-	httputil.RespondJSON(w, http.StatusOK, pref, nil)
+	response.OK(w, pref)
 }
 
 // Set godoc
@@ -54,24 +55,24 @@ func (h *PreferenceHandler) Get(w http.ResponseWriter, r *http.Request) {
 // @Param userId path string true "User ID"
 // @Param body body domain.Preference true "Preference settings"
 // @Success 204 "No Content"
-// @Failure 400 {object} httputil.Response
-// @Failure 500 {object} httputil.Response
+// @Failure 400 {object} response.Response
+// @Failure 500 {object} response.Response
 // @Router /users/{userId}/preferences [put]
 func (h *PreferenceHandler) Set(w http.ResponseWriter, r *http.Request) {
 	userID := r.PathValue("userId")
 	if userID == "" {
-		httputil.ErrBadRequest(w, "missing userId")
+		response.BadRequest(w, "missing userId")
 		return
 	}
 	var pref domain.Preference
 	if err := json.NewDecoder(r.Body).Decode(&pref); err != nil {
-		httputil.ErrBadRequest(w, "invalid request body")
+		response.BadRequest(w, "invalid request body")
 		return
 	}
 	pref.UserID = userID
 	if err := h.store.Set(r.Context(), &pref); err != nil {
-		httputil.ErrInternal(w, "failed to update preferences")
+		response.InternalError(w, "failed to update preferences")
 		return
 	}
-	httputil.RespondNoContent(w)
+	response.NoContent(w)
 }

@@ -6,7 +6,8 @@ import (
 
 	"be-modami-no-service/internal/domain"
 	"be-modami-no-service/internal/store"
-	"be-modami-no-service/pkg/httputil"
+
+	"gitlab.com/lifegoeson-libs/pkg-gokit/response"
 )
 
 // SubscriberHandler groups subscriber-related HTTP handlers.
@@ -31,23 +32,23 @@ func (h *SubscriberHandler) RegisterRoutes(mux *http.ServeMux) {
 // @Param userId path string true "User ID"
 // @Param body body domain.Subscriber true "Subscriber details"
 // @Success 201 "Created"
-// @Failure 400 {object} httputil.Response
-// @Failure 500 {object} httputil.Response
+// @Failure 400 {object} response.Response
+// @Failure 500 {object} response.Response
 // @Router /users/{userId}/subscribers [post]
 func (h *SubscriberHandler) Register(w http.ResponseWriter, r *http.Request) {
 	userID := r.PathValue("userId")
 	if userID == "" {
-		httputil.ErrBadRequest(w, "missing userId")
+		response.BadRequest(w, "missing userId")
 		return
 	}
 	var sub domain.Subscriber
 	if err := json.NewDecoder(r.Body).Decode(&sub); err != nil {
-		httputil.ErrBadRequest(w, "invalid request body")
+		response.BadRequest(w, "invalid request body")
 		return
 	}
 	sub.UserID = userID
 	if err := h.store.Upsert(r.Context(), &sub); err != nil {
-		httputil.ErrInternal(w, "failed to register subscriber")
+		response.InternalError(w, "failed to register subscriber")
 		return
 	}
 	w.WriteHeader(http.StatusCreated)
@@ -60,19 +61,19 @@ func (h *SubscriberHandler) Register(w http.ResponseWriter, r *http.Request) {
 // @Param userId path string true "User ID"
 // @Param token path string true "Device token"
 // @Success 204 "No Content"
-// @Failure 400 {object} httputil.Response
-// @Failure 500 {object} httputil.Response
+// @Failure 400 {object} response.Response
+// @Failure 500 {object} response.Response
 // @Router /users/{userId}/subscribers/{token} [delete]
 func (h *SubscriberHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	userID := r.PathValue("userId")
 	token := r.PathValue("token")
 	if userID == "" || token == "" {
-		httputil.ErrBadRequest(w, "missing userId or token")
+		response.BadRequest(w, "missing userId or token")
 		return
 	}
 	if err := h.store.DeleteByToken(r.Context(), userID, token); err != nil {
-		httputil.ErrInternal(w, "failed to delete subscriber")
+		response.InternalError(w, "failed to delete subscriber")
 		return
 	}
-	httputil.RespondNoContent(w)
+	response.NoContent(w)
 }

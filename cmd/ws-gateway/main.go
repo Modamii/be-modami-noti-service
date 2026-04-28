@@ -22,8 +22,9 @@ import (
 	"be-modami-no-service/internal/gateway"
 	"be-modami-no-service/pkg/centrifugo"
 	"be-modami-no-service/pkg/health"
-	"be-modami-no-service/pkg/httputil"
 
+	"gitlab.com/lifegoeson-libs/pkg-gokit/response"
+	pkgmw "gitlab.com/lifegoeson-libs/pkg-logging/middleware"
 	"gitlab.com/lifegoeson-libs/pkg-logging/logger"
 )
 
@@ -61,11 +62,7 @@ func main() {
 	proxyHandler := gateway.NewProxyHandler(cfg.Centrifugo.HMACSecret)
 	proxyHandler.RegisterRoutes(mux)
 
-	handler := httputil.Chain(mux,
-		httputil.Recovery,
-		httputil.RequestID,
-		httputil.RequestLogging,
-	)
+	handler := pkgmw.HTTPMiddleware("ws-gateway", response.RecoveryMiddleware(mux), nil)
 
 	srv := &http.Server{
 		Addr:         cfg.Servers.GatewayAddr,

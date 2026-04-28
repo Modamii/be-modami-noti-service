@@ -6,6 +6,7 @@ import (
 
 	"be-modami-no-service/internal/service"
 	"be-modami-no-service/pkg/contract"
+	"be-modami-no-service/pkg/utils"
 )
 
 // CommentCreated extracts event-specific data and delegates to NotificationService.
@@ -17,17 +18,17 @@ func CommentCreated(svc *service.NotificationService) Handler {
 		}
 		do := payload.Do[0]
 
-		title := getStr(do.Data, "title")
+		title := utils.GetStr(do.Data, "title")
 		if title == "" {
 			title = "New comment"
 		}
-		body := getStr(do.Data, "content")
+		body := utils.GetStr(do.Data, "content")
 		if body == "" {
-			body = getStr(do.Data, "body")
+			body = utils.GetStr(do.Data, "body")
 		}
 		link := fmt.Sprintf("/comments/%s", do.ID)
 
-		userIDs := resolveRecipients(e)
+		userIDs := utils.ResolveRecipients(e)
 		if len(userIDs) == 0 {
 			return nil
 		}

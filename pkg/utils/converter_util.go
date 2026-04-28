@@ -1,11 +1,11 @@
-package handlers
+package utils
 
 import "be-modami-no-service/pkg/contract"
 
 // resolveRecipients returns user IDs from extra.To or payload (e.g. audience_ids in do[0].data).
-func resolveRecipients(e *contract.NotificationEvent) []string {
+func ResolveRecipients(e *contract.NotificationEvent) []string {
 	if e.Extra != nil && e.Extra.To != nil {
-		return sliceFromInterface(e.Extra.To)
+		return SliceFromInterface(e.Extra.To)
 	}
 	if len(e.Payload.Do) == 0 {
 		return nil
@@ -15,12 +15,12 @@ func resolveRecipients(e *contract.NotificationEvent) []string {
 		return nil
 	}
 	if ids, ok := data["audience_ids"]; ok {
-		return sliceFromInterface(ids)
+		return SliceFromInterface(ids)
 	}
 	return nil
 }
 
-func getStr(m map[string]interface{}, key string) string {
+func GetStr(m map[string]interface{}, key string) string {
 	if m == nil {
 		return ""
 	}
@@ -28,7 +28,7 @@ func getStr(m map[string]interface{}, key string) string {
 	return v
 }
 
-func sliceFromInterface(v interface{}) []string {
+func SliceFromInterface(v interface{}) []string {
 	switch x := v.(type) {
 	case []string:
 		return x

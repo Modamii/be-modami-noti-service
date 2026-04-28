@@ -19,10 +19,10 @@ import (
 	mongostore "be-modami-no-service/internal/store/mongo"
 	"be-modami-no-service/pkg/contract"
 	"be-modami-no-service/pkg/health"
-	"be-modami-no-service/pkg/kafka"
 	database "be-modami-no-service/pkg/storage/database/mongodb"
 
 	"github.com/redis/go-redis/v9"
+	"gitlab.com/lifegoeson-libs/pkg-gokit/kafka"
 	"gitlab.com/lifegoeson-libs/pkg-logging/logger"
 )
 
@@ -92,7 +92,12 @@ func main() {
 
 	// Kafka consumer using KafkaService with retry, DLQ, and trace propagation
 	if cfg.Kafka.Enable && cfg.Kafka.BrokerList != "" {
-		kafkaSvc, err := kafka.NewKafkaService(nil, cfg)
+		kafkaCfg := &kafka.Config{
+			Brokers:         cfg.Kafka.Brokers(),
+			ClientID:        cfg.Kafka.ClientID,
+			ConsumerGroupID: cfg.Kafka.ConsumerGroup,
+		}
+		kafkaSvc, err := kafka.NewKafkaService(kafkaCfg)
 		if err != nil {
 			l.Error("failed to create kafka service", err)
 			os.Exit(1)

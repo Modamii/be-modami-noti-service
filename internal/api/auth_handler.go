@@ -6,8 +6,8 @@ import (
 
 	"be-modami-no-service/config"
 	"be-modami-no-service/pkg/centrifugo"
-	"be-modami-no-service/pkg/httputil"
 
+	"gitlab.com/lifegoeson-libs/pkg-gokit/response"
 	"gitlab.com/lifegoeson-libs/pkg-logging/logger"
 )
 
@@ -32,23 +32,23 @@ func (h *AuthHandler) RegisterRoutes(mux *http.ServeMux) {
 // @Produce json
 // @Param body body object{user_id=string} true "User ID"
 // @Success 200 {object} object{data=object{token=string}}
-// @Failure 400 {object} httputil.Response
-// @Failure 500 {object} httputil.Response
+// @Failure 400 {object} response.Response
+// @Failure 500 {object} response.Response
 // @Router /auth/centrifugo-token [post]
 func (h *AuthHandler) CentrifugoToken(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		UserID string `json:"user_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.UserID == "" {
-		httputil.ErrBadRequest(w, "user_id is required")
+		response.BadRequest(w, "user_id is required")
 		return
 	}
 	token, err := centrifugo.GenerateConnectionToken(h.cfg.Centrifugo.HMACSecret, req.UserID, h.cfg.Centrifugo.TokenTTL)
 	if err != nil {
 		l := logger.FromContext(r.Context())
 		l.Error("failed to generate centrifugo token", err)
-		httputil.ErrInternal(w, "failed to generate token")
+		response.InternalError(w, "failed to generate token")
 		return
 	}
-	httputil.RespondJSON(w, http.StatusOK, map[string]string{"token": token}, nil)
+	response.OK(w, map[string]string{"token": token})
 }
