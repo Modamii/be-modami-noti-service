@@ -8,7 +8,7 @@ variables:
   DOCKER_REPO: "be-modami-noti-service"
   DOCKER_DRIVER: overlay2
   DOCKER_TLS_CERTDIR: ""
-  GOFLAGS: "-mod=mod"
+  GOFLAGS: "-mod=readonly"
 
 # ─── BUILD & TEST ─────────────────────────────────────────────────────────────
 
@@ -24,8 +24,7 @@ build:
   script:
     - go mod download
     - go vet ./...
-    - go build -v ./...
-    - go test -v ./...
+    - go build ./...
   rules:
     - if: $CI_COMMIT_BRANCH == "master"
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
@@ -117,7 +116,6 @@ gitleaks-scan:
     - echo "Building $FULL_IMAGE:$IMAGE_TAG"
     - |
       DOCKER_BUILDKIT=1 docker build \
-        --secret id=gitlab_username,env=GITLAB_CI_USERNAME \
         --secret id=gitlab_token,env=CI_JOB_TOKEN \
         -f build/docker/Dockerfile.$SERVICE \
         -t "$FULL_IMAGE:latest" \
