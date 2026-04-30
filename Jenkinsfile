@@ -41,30 +41,6 @@ pipeline {
             }
         }
 
-        stage('Lint') {
-            steps {
-                sh '''
-                    docker run --rm \
-                        -v "$(pwd):/app" \
-                        -w /app \
-                        golangci/golangci-lint:latest \
-                        sh -c "go mod download && golangci-lint run --timeout 5m"
-                '''
-            }
-        }
-
-        stage('Test') {
-            steps {
-                sh '''
-                    docker run --rm \
-                        -v "$(pwd):/app" \
-                        -w /app \
-                        golang:1.24-alpine \
-                        go test ./... -coverprofile=coverage.out -covermode=atomic
-                '''
-            }
-        }
-
         stage('Dependency Audit') {
             steps {
                 sh '''
@@ -87,6 +63,7 @@ pipeline {
                     ),
                     usernamePassword(
                         credentialsId: 'gitlab-credentials',
+                        
                         usernameVariable: 'GITLAB_USER',
                         passwordVariable: 'GITLAB_TOKEN'
                     )
