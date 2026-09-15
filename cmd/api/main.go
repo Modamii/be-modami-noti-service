@@ -21,13 +21,16 @@ import (
 
 	"be-modami-no-service/config"
 	"be-modami-no-service/internal/api"
+	"be-modami-no-service/internal/api/middleware"
+	"be-modami-no-service/internal/queue"
 	mongostore "be-modami-no-service/internal/store/mongo"
 	"be-modami-no-service/pkg/health"
 	database "be-modami-no-service/pkg/storage/database/mongodb"
 
+	"github.com/redis/go-redis/v9"
 	"gitlab.com/lifegoeson-libs/pkg-gokit/response"
-	pkgmw "gitlab.com/lifegoeson-libs/pkg-logging/middleware"
 	"gitlab.com/lifegoeson-libs/pkg-logging/logger"
+	pkgmw "gitlab.com/lifegoeson-libs/pkg-logging/middleware"
 
 	"be-modami-no-service/docs"
 
@@ -89,13 +92,35 @@ func main() {
 		httpSwagger.URL("/swagger/doc.json"),
 	))
 
-	// Register all API route groups
-	api.RegisterAll(mux,
+	// Every /v1/noti-services route is registered on its own mux so one auth guard
+	// covers all of them. Health and swagger stay on the root mux, unauthenticated.
+	// Read state is pushed to the user's other devices through the same Redis
+	// queue notifications use. Optional: without Redis the API still works and
+	// other devices simply catch up on their next refetch.
+	notificationHandler := api.NewNotificationHandler(notificationStore)
+	rdb := redis.NewClient(configs.RedisOptions(cfg))
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		l.Error("read-sync disabled: redis unavailable", err)
+		_ = rdb.Close()
+	} else {
+		defer rdb.Close()
+		notificationHandler = notificationHandler.WithReadSync(
+			api.NewReadSyncPublisher(queue.New(rdb), cfg.Queue.WSKey))
+	}
+
+	apiMux := http.NewServeMux()
+	api.RegisterAll(apiMux,
 		api.NewAuthHandler(cfg),
-		api.NewNotificationHandler(notificationStore),
+		notificationHandler,
 		api.NewPreferenceHandler(preferenceStore),
 		api.NewSubscriberHandler(subscriberStore),
 	)
+
+	auth := middleware.NewAuth(cfg.Auth.JWKSUrl)
+	if cfg.Auth.JWKSUrl == "" {
+		l.Warn("auth.jwks_url is empty — token signatures are NOT verified; only safe behind a gateway that already validated them")
+	}
+	mux.Handle("/v1/noti-services/", auth.Required(apiMux))
 
 	// Apply middleware: recovery → CORS → tracing/logging
 	var handler http.Handler = mux

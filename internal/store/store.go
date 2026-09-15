@@ -24,14 +24,19 @@ type PaginatedResult struct {
 }
 
 // NotificationStore: MongoDB-backed notification storage.
+//
+// Every single-document method takes userID and scopes the query by it, so a
+// caller can never read or mutate a notification belonging to someone else.
 type NotificationStore interface {
 	Create(ctx context.Context, n *domain.Notification) error
-	GetByID(ctx context.Context, id string) (*domain.Notification, error)
+	GetByID(ctx context.Context, userID, id string) (*domain.Notification, error)
 	ListByUserID(ctx context.Context, userID string, limit int) ([]*domain.Notification, error)
 	ListByUserIDPaginated(ctx context.Context, userID string, params PaginationParams) (*PaginatedResult, error)
-	MarkRead(ctx context.Context, id string) error
+	// MarkRead reports whether a notification owned by userID was updated.
+	MarkRead(ctx context.Context, userID, id string) (bool, error)
 	MarkAllRead(ctx context.Context, userID string) (int64, error)
-	Delete(ctx context.Context, id string) error
+	// Delete reports whether a notification owned by userID was removed.
+	Delete(ctx context.Context, userID, id string) (bool, error)
 	CountUnread(ctx context.Context, userID string) (int64, error)
 }
 

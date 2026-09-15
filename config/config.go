@@ -15,6 +15,7 @@ import (
 // Config holds all configuration for the notification service.
 type Config struct {
 	App           AppConfig           `mapstructure:"app"`
+	Auth          AuthConfig          `mapstructure:"auth"`
 	MongoDB       MongoDBConfig       `mapstructure:"mongodb"`
 	Redis         RedisConfig         `mapstructure:"redis"`
 	Kafka         KafkaConfig         `mapstructure:"kafka"`
@@ -128,6 +129,15 @@ type ServersConfig struct {
 	APIAddr     string `mapstructure:"api_addr"`
 	IngestAddr  string `mapstructure:"ingest_addr"`
 	GatewayAddr string `mapstructure:"gateway_addr"`
+}
+
+// AuthConfig controls how incoming access tokens are verified.
+//
+// JWKSUrl empty means signatures are NOT checked and the sub claim is trusted —
+// only safe behind a gateway that already verified the token. Loud on startup so
+// it can never be the accidental production setting.
+type AuthConfig struct {
+	JWKSUrl string `mapstructure:"jwks_url"`
 }
 
 type FCMConfig struct {
@@ -245,6 +255,9 @@ func setDefaults() {
 	viper.SetDefault("app.idle_timeout", "120s")
 	viper.SetDefault("app.allowed_origins", []string{"http://localhost:5173", "http://localhost:3000", "http://localhost:8080", "http://localhost:8081"})
 	viper.SetDefault("app.allow_credentials", true)
+
+	viper.SetDefault("auth.jwks_url", "")
+	viper.SetDefault("fcm.credentials_path", "")
 
 	viper.SetDefault("mongodb.uri", "mongodb://localhost:27017")
 	viper.SetDefault("mongodb.database", "notifications")

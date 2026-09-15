@@ -147,6 +147,11 @@ func newRegistryWithHandlers(svc *service.NotificationService) handlers.Registry
 	reg := handlers.NewRegistry()
 	reg.Register(contract.ContentPublished, handlers.ContentPublished(svc))
 	reg.Register(contract.CommentCreated, handlers.CommentCreated(svc))
+	// Lingocast identities all share one handler — their copy travels in the event.
+	lingocast := handlers.Lingocast(svc)
+	for _, identity := range contract.LingocastIdentities {
+		reg.Register(identity, lingocast)
+	}
 	return reg
 }
 

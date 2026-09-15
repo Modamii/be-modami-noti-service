@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"be-modami-no-service/config"
@@ -25,30 +24,32 @@ func (h *AuthHandler) RegisterRoutes(mux *http.ServeMux) {
 }
 
 // CentrifugoToken godoc
-// @Summary Generate Centrifugo connection token
-// @Description Generate a JWT token for client WebSocket connection to Centrifugo
+// @Summary Generate a Centrifugo connection token for the caller
+// @Description Mints a short-lived WebSocket token for the authenticated user. The subject
+// @Description comes from the access token, so a token can never be requested for someone else.
 // @Tags auth
-// @Accept json
 // @Produce json
-// @Param body body object{user_id=string} true "User ID"
-// @Success 200 {object} object{data=object{token=string}}
-// @Failure 400 {object} response.Response
+// @Security BearerAuth
+// @Success 200 {object} object{data=object{token=string,expires_in=int}}
+// @Failure 401 {object} response.Response
 // @Failure 500 {object} response.Response
 // @Router /auth/centrifugo-token [post]
 func (h *AuthHandler) CentrifugoToken(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		UserID string `json:"user_id"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.UserID == "" {
-		response.BadRequest(w, "user_id is required")
+	userID, ok := callerID(w, r)
+	if !ok {
 		return
 	}
-	token, err := centrifugo.GenerateConnectionToken(h.cfg.Centrifugo.HMACSecret, req.UserID, h.cfg.Centrifugo.TokenTTL)
+
+	token, err := centrifugo.GenerateConnectionToken(h.cfg.Centrifugo.HMACSecret, userID, h.cfg.Centrifugo.TokenTTL)
 	if err != nil {
-		l := logger.FromContext(r.Context())
-		l.Error("failed to generate centrifugo token", err)
+		logger.FromContext(r.Context()).Error("failed to generate centrifugo token", err)
 		response.InternalError(w, "failed to generate token")
 		return
 	}
-	response.OK(w, map[string]string{"token": token})
+
+	// expires_in lets the client schedule a refresh before Centrifugo drops the socket.
+	response.OK(w, map[string]any{
+		"token":      token,
+		"expires_in": h.cfg.Centrifugo.TokenTTL,
+	})
 }

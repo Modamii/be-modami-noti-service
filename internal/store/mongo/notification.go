@@ -32,9 +32,9 @@ func (s *notificationStore) Create(ctx context.Context, n *domain.Notification) 
 	return err
 }
 
-func (s *notificationStore) GetByID(ctx context.Context, id string) (*domain.Notification, error) {
+func (s *notificationStore) GetByID(ctx context.Context, userID, id string) (*domain.Notification, error) {
 	var n domain.Notification
-	err := s.coll.FindOne(ctx, bson.M{"_id": id}).Decode(&n)
+	err := s.coll.FindOne(ctx, bson.M{"_id": id, "user_id": userID}).Decode(&n)
 	if err == mongo.ErrNoDocuments {
 		return nil, nil
 	}
@@ -123,9 +123,14 @@ func (s *notificationStore) ListByUserIDPaginated(ctx context.Context, userID st
 	}, nil
 }
 
-func (s *notificationStore) MarkRead(ctx context.Context, id string) error {
-	_, err := s.coll.UpdateOne(ctx, bson.M{"_id": id}, bson.M{"$set": bson.M{"read": true}})
-	return err
+func (s *notificationStore) MarkRead(ctx context.Context, userID, id string) (bool, error) {
+	res, err := s.coll.UpdateOne(ctx,
+		bson.M{"_id": id, "user_id": userID},
+		bson.M{"$set": bson.M{"read": true}})
+	if err != nil {
+		return false, err
+	}
+	return res.MatchedCount > 0, nil
 }
 
 func (s *notificationStore) MarkAllRead(ctx context.Context, userID string) (int64, error) {
@@ -136,9 +141,12 @@ func (s *notificationStore) MarkAllRead(ctx context.Context, userID string) (int
 	return result.ModifiedCount, nil
 }
 
-func (s *notificationStore) Delete(ctx context.Context, id string) error {
-	_, err := s.coll.DeleteOne(ctx, bson.M{"_id": id})
-	return err
+func (s *notificationStore) Delete(ctx context.Context, userID, id string) (bool, error) {
+	res, err := s.coll.DeleteOne(ctx, bson.M{"_id": id, "user_id": userID})
+	if err != nil {
+		return false, err
+	}
+	return res.DeletedCount > 0, nil
 }
 
 func (s *notificationStore) CountUnread(ctx context.Context, userID string) (int64, error) {

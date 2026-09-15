@@ -39,11 +39,11 @@ func (s *notificationStore) Create(_ context.Context, n *domain.Notification) er
 	return nil
 }
 
-func (s *notificationStore) GetByID(_ context.Context, id string) (*domain.Notification, error) {
+func (s *notificationStore) GetByID(_ context.Context, userID, id string) (*domain.Notification, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	n, ok := s.byID[id]
-	if !ok {
+	if !ok || n.UserID != userID {
 		return nil, nil
 	}
 	cp := *n
@@ -122,13 +122,15 @@ func (s *notificationStore) ListByUserIDPaginated(_ context.Context, userID stri
 	}, nil
 }
 
-func (s *notificationStore) MarkRead(_ context.Context, id string) error {
+func (s *notificationStore) MarkRead(_ context.Context, userID, id string) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if n, ok := s.byID[id]; ok {
-		n.Read = true
+	n, ok := s.byID[id]
+	if !ok || n.UserID != userID {
+		return false, nil
 	}
-	return nil
+	n.Read = true
+	return true, nil
 }
 
 func (s *notificationStore) MarkAllRead(_ context.Context, userID string) (int64, error) {
@@ -144,12 +146,12 @@ func (s *notificationStore) MarkAllRead(_ context.Context, userID string) (int64
 	return count, nil
 }
 
-func (s *notificationStore) Delete(_ context.Context, id string) error {
+func (s *notificationStore) Delete(_ context.Context, userID, id string) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	n, ok := s.byID[id]
-	if !ok {
-		return nil
+	if !ok || n.UserID != userID {
+		return false, nil
 	}
 	delete(s.byID, id)
 	list := s.byUser[n.UserID]
@@ -159,7 +161,7 @@ func (s *notificationStore) Delete(_ context.Context, id string) error {
 			break
 		}
 	}
-	return nil
+	return true, nil
 }
 
 func (s *notificationStore) CountUnread(_ context.Context, userID string) (int64, error) {

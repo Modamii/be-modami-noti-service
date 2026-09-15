@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"be-modami-no-service/internal/domain"
 	"be-modami-no-service/internal/store"
 
 	"gitlab.com/lifegoeson-libs/pkg-gokit/response"
@@ -12,11 +11,18 @@ import (
 
 // NotificationHandler groups all notification-related HTTP handlers.
 type NotificationHandler struct {
-	store store.NotificationStore
+	store    store.NotificationStore
+	readSync ReadSyncPublisher // nil-safe: without it, other devices catch up on refetch
 }
 
 func NewNotificationHandler(s store.NotificationStore) *NotificationHandler {
 	return &NotificationHandler{store: s}
+}
+
+// WithReadSync makes read state propagate to the user's other devices.
+func (h *NotificationHandler) WithReadSync(p ReadSyncPublisher) *NotificationHandler {
+	h.readSync = p
+	return h
 }
 
 // RegisterRoutes registers notification routes on the given mux.
@@ -43,9 +49,8 @@ func (h *NotificationHandler) RegisterRoutes(mux *http.ServeMux) {
 // @Failure 500 {object} response.Response
 // @Router /users/{userId}/notifications [get]
 func (h *NotificationHandler) List(w http.ResponseWriter, r *http.Request) {
-	userID := r.PathValue("userId")
-	if userID == "" {
-		response.BadRequest(w, "missing userId")
+	userID, ok := callerID(w, r)
+	if !ok {
 		return
 	}
 
@@ -89,18 +94,22 @@ func (h *NotificationHandler) List(w http.ResponseWriter, r *http.Request) {
 // @Failure 500 {object} response.Response
 // @Router /notifications/{id} [get]
 func (h *NotificationHandler) GetByID(w http.ResponseWriter, r *http.Request) {
+	userID, ok := callerID(w, r)
+	if !ok {
+		return
+	}
 	id := r.PathValue("id")
 	if id == "" {
 		response.BadRequest(w, "missing id")
 		return
 	}
-	var n *domain.Notification
-	var err error
-	n, err = h.store.GetByID(r.Context(), id)
+	n, err := h.store.GetByID(r.Context(), userID, id)
 	if err != nil {
 		response.InternalError(w, "failed to get notification")
 		return
 	}
+	// A notification owned by someone else is reported as missing rather than
+	// forbidden, so ids cannot be probed for existence.
 	if n == nil {
 		response.NotFound(w, "notification not found")
 		return
@@ -117,14 +126,29 @@ func (h *NotificationHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 // @Failure 500 {object} response.Response
 // @Router /notifications/{id}/read [patch]
 func (h *NotificationHandler) MarkRead(w http.ResponseWriter, r *http.Request) {
+	userID, ok := callerID(w, r)
+	if !ok {
+		return
+	}
 	id := r.PathValue("id")
 	if id == "" {
 		response.BadRequest(w, "missing id")
 		return
 	}
-	if err := h.store.MarkRead(r.Context(), id); err != nil {
+	updated, err := h.store.MarkRead(r.Context(), userID, id)
+	if err != nil {
 		response.InternalError(w, "failed to mark notification as read")
 		return
+	}
+	if !updated {
+		response.NotFound(w, "notification not found")
+		return
+	}
+	if h.readSync != nil {
+		unread, cErr := h.store.CountUnread(r.Context(), userID)
+		if cErr == nil {
+			h.readSync.NotificationRead(r.Context(), userID, id, unread)
+		}
 	}
 	response.NoContent(w)
 }
@@ -139,15 +163,17 @@ func (h *NotificationHandler) MarkRead(w http.ResponseWriter, r *http.Request) {
 // @Failure 500 {object} response.Response
 // @Router /users/{userId}/notifications/read-all [patch]
 func (h *NotificationHandler) MarkAllRead(w http.ResponseWriter, r *http.Request) {
-	userID := r.PathValue("userId")
-	if userID == "" {
-		response.BadRequest(w, "missing userId")
+	userID, ok := callerID(w, r)
+	if !ok {
 		return
 	}
 	count, err := h.store.MarkAllRead(r.Context(), userID)
 	if err != nil {
 		response.InternalError(w, "failed to mark all as read")
 		return
+	}
+	if h.readSync != nil {
+		h.readSync.NotificationReadAll(r.Context(), userID)
 	}
 	response.OK(w, map[string]int64{"updated": count})
 }
@@ -161,13 +187,22 @@ func (h *NotificationHandler) MarkAllRead(w http.ResponseWriter, r *http.Request
 // @Failure 500 {object} response.Response
 // @Router /notifications/{id} [delete]
 func (h *NotificationHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	userID, ok := callerID(w, r)
+	if !ok {
+		return
+	}
 	id := r.PathValue("id")
 	if id == "" {
 		response.BadRequest(w, "missing id")
 		return
 	}
-	if err := h.store.Delete(r.Context(), id); err != nil {
+	deleted, err := h.store.Delete(r.Context(), userID, id)
+	if err != nil {
 		response.InternalError(w, "failed to delete notification")
+		return
+	}
+	if !deleted {
+		response.NotFound(w, "notification not found")
 		return
 	}
 	response.NoContent(w)
@@ -183,9 +218,8 @@ func (h *NotificationHandler) Delete(w http.ResponseWriter, r *http.Request) {
 // @Failure 500 {object} response.Response
 // @Router /users/{userId}/notifications/unread-count [get]
 func (h *NotificationHandler) CountUnread(w http.ResponseWriter, r *http.Request) {
-	userID := r.PathValue("userId")
-	if userID == "" {
-		response.BadRequest(w, "missing userId")
+	userID, ok := callerID(w, r)
+	if !ok {
 		return
 	}
 	count, err := h.store.CountUnread(r.Context(), userID)

@@ -20,6 +20,24 @@ type NotificationParams struct {
 	Link     string
 	Extra    map[string]interface{}
 	UserIDs  []string
+
+	// Channel, when set, is a challenge ID: the event is broadcast once to the
+	// shared channel instead of to each recipient's personal channel.
+	Channel string
+
+	// Filled in by Process — handlers leave these zero.
+	Persisted    map[string]*domain.Notification // userID → the stored notification
+	UnreadCount  map[string]int64                // userID → unread total after persisting
+	DeviceTokens map[string][]string             // userID → push tokens, set during enrich
+}
+
+// withRecipients returns a shallow copy carrying a different recipient list.
+// Copying the struct rather than rebuilding it field by field means a new field
+// can never be silently dropped from the pipeline.
+func (p *NotificationParams) withRecipients(userIDs []string) *NotificationParams {
+	cp := *p
+	cp.UserIDs = userIDs
+	return &cp
 }
 
 // ChannelDispatcher defines a strategy for dispatching notifications to a delivery channel.
@@ -55,8 +73,14 @@ func NewNotificationService(
 func (svc *NotificationService) Process(ctx context.Context, params *NotificationParams) error {
 	l := logger.FromContext(ctx)
 
-	// 1. Persist notifications
-	svc.persistNotifications(ctx, params)
+	// 1. Persist notifications, and remember them so dispatchers can send a payload
+	// the client can render without a follow-up API call. Transient identities
+	// skip this: they are live status, not history, and counting them as unread
+	// would make the bell badge meaningless.
+	if !contract.IsTransient(params.Identity) {
+		params.Persisted = svc.persistNotifications(ctx, params)
+		params.UnreadCount = svc.unreadCounts(ctx, params.UserIDs)
+	}
 
 	// 2. Determine which channels this identity should dispatch to
 	channels := contract.IdentityChannels[params.Identity]
@@ -85,55 +109,59 @@ func (svc *NotificationService) Process(ctx context.Context, params *Notificatio
 	return nil
 }
 
-// filterByPreference removes users who have disabled the given channel.
+// filterByPreference removes users who should not receive this notification on
+// this channel. A preference lookup that fails defaults to delivering: a missed
+// notification is worse than one the user could have muted.
 func (svc *NotificationService) filterByPreference(ctx context.Context, params *NotificationParams, channel string) *NotificationParams {
 	if svc.preferenceStore == nil {
 		return params
 	}
 
+	now := time.Now()
 	filtered := make([]string, 0, len(params.UserIDs))
 	for _, uid := range params.UserIDs {
 		pref, err := svc.preferenceStore.Get(ctx, uid)
 		if err != nil {
-			// On error, default to allowing delivery
 			logger.FromContext(ctx).Error("failed to get preference for user: "+uid, err)
 			filtered = append(filtered, uid)
 			continue
 		}
-		if isChannelEnabled(pref, channel) {
+		if allowed(pref, params.Identity, channel, now) {
 			filtered = append(filtered, uid)
 		}
 	}
 
-	return &NotificationParams{
-		Identity: params.Identity,
-		Title:    params.Title,
-		Body:     params.Body,
-		Link:     params.Link,
-		Extra:    params.Extra,
-		UserIDs:  filtered,
-	}
+	return params.withRecipients(filtered)
 }
 
-func isChannelEnabled(pref *domain.Preference, channel string) bool {
+// allowed applies the three preference gates in order: the channel switch, the
+// per-type mute, then quiet hours.
+func allowed(pref *domain.Preference, identity, channel string, now time.Time) bool {
+	if pref.IsMuted(identity) {
+		return false
+	}
 	switch channel {
 	case contract.ChannelInApp:
 		return pref.InAppEnabled
 	case contract.ChannelPush:
-		return pref.PushEnabled
+		// Quiet hours apply to push only — in-app is silent and the user is
+		// already looking at the screen.
+		return pref.PushEnabled && !pref.InQuietHours(now)
 	default:
 		return true
 	}
 }
 
-// enrich adds channel-specific data to params (e.g. device tokens for push).
+// enrich adds channel-specific data to params (device tokens for push).
+//
+// Tokens stay grouped by user rather than flattened into one list: the push
+// worker deletes tokens FCM rejects, and that requires knowing the owner.
 func (svc *NotificationService) enrich(ctx context.Context, params *NotificationParams, channel string) *NotificationParams {
 	if channel != contract.ChannelPush || svc.subscriberStore == nil {
 		return params
 	}
 
-	// Resolve device tokens for push recipients
-	var tokens []string
+	tokens := make(map[string][]string, len(params.UserIDs))
 	for _, uid := range params.UserIDs {
 		subs, err := svc.subscriberStore.ByUserID(ctx, uid)
 		if err != nil {
@@ -142,28 +170,18 @@ func (svc *NotificationService) enrich(ctx context.Context, params *Notification
 		}
 		for _, s := range subs {
 			if s.DeviceToken != "" {
-				tokens = append(tokens, s.DeviceToken)
+				tokens[uid] = append(tokens[uid], s.DeviceToken)
 			}
 		}
 	}
 
-	enrichedExtra := make(map[string]interface{}, len(params.Extra)+1)
-	for k, v := range params.Extra {
-		enrichedExtra[k] = v
-	}
-	enrichedExtra["device_tokens"] = tokens
-
-	return &NotificationParams{
-		Identity: params.Identity,
-		Title:    params.Title,
-		Body:     params.Body,
-		Link:     params.Link,
-		Extra:    enrichedExtra,
-		UserIDs:  params.UserIDs,
-	}
+	cp := *params
+	cp.DeviceTokens = tokens
+	return &cp
 }
 
-func (svc *NotificationService) persistNotifications(ctx context.Context, params *NotificationParams) {
+func (svc *NotificationService) persistNotifications(ctx context.Context, params *NotificationParams) map[string]*domain.Notification {
+	stored := make(map[string]*domain.Notification, len(params.UserIDs))
 	for _, uid := range params.UserIDs {
 		notif := &domain.Notification{
 			ID:        uuid.New().String(),
@@ -178,6 +196,24 @@ func (svc *NotificationService) persistNotifications(ctx context.Context, params
 		}
 		if err := svc.store.Create(ctx, notif); err != nil {
 			logger.FromContext(ctx).Error("failed to persist notification", err)
+			continue
 		}
+		stored[uid] = notif
 	}
+	return stored
+}
+
+// unreadCounts reads each recipient's unread total so the in-app payload can
+// carry a badge number the client applies without another round trip.
+func (svc *NotificationService) unreadCounts(ctx context.Context, userIDs []string) map[string]int64 {
+	counts := make(map[string]int64, len(userIDs))
+	for _, uid := range userIDs {
+		n, err := svc.store.CountUnread(ctx, uid)
+		if err != nil {
+			logger.FromContext(ctx).Error("failed to count unread for user: "+uid, err)
+			continue
+		}
+		counts[uid] = n
+	}
+	return counts
 }

@@ -58,14 +58,76 @@ Every entity in `actor`, `do`, `io`, `po` follows this shape:
 
 An *identity* names the event type. The notification service maps each identity to a set of delivery channels.
 
+### techinsight / modami
+
+Copy is composed here, by a bespoke handler per identity.
+
 | Identity | Description | Channels |
 |----------|-------------|----------|
 | `content_published` | A post or article was published | `in_app`, `push` |
 | `comment_created` | A comment was added to content | `in_app`, `push` |
 
+### lingocast
+
+All lingocast identities share one handler (`internal/handlers/lingocast.go`).
+The producer owns the wording and supplies `title`, `body` and `link` in
+`do[0].data`; everything else in `do[0].data` is passed through to the client.
+Adding a lingocast notification type needs an identity constant and a channel
+mapping here — no new handler.
+
+| Identity | Description | Channels |
+|----------|-------------|----------|
+| `video_ready` | Video processed, transcript available | `in_app`, `push` |
+| `video_failed` | Pipeline failed at some step | `in_app`, `push` |
+| `video_progress` | Pipeline step changed | `in_app` |
+| `flashcard_due` | Cards are due for review | `in_app`, `push` |
+| `streak_at_risk` | Streak will be lost today | `push` |
+| `achievement_unlocked` | New achievement earned | `in_app`, `push` |
+| `challenge_leaderboard` | Challenge standings changed | `in_app` (broadcast) |
+| `challenge_ended` | Challenge finished, results ready | `in_app`, `push` |
+
+`video_progress` and `challenge_leaderboard` are in-app only — they are useful
+while the screen is open and would be noise as a push. `streak_at_risk` is push
+only, since the streak counter is already visible in-app.
+
 Channel values: `in_app` (WebSocket via Centrifugo), `push` (FCM / Web Push), `email` (future).
 
 Mapping lives in: `pkg/contract/channels.go` → `IdentityChannels`
+
+---
+
+## WebSocket Channels and Access
+
+| Channel | Who may subscribe |
+|---------|-------------------|
+| `noti:user:{userID}` | The owner only |
+| `noti:topic:{topic}` | Any authenticated user — public broadcast |
+| `noti:challenge:{id}` | Requires a subscription token minted for exactly this user and channel |
+
+Enforced in one place: `internal/gateway/policy.go` → `ChannelPolicy.Allow`.
+A challenge channel is shared between participants, so the noti service cannot
+judge membership itself — the service that owns the challenge mints a
+subscription token (`centrifugo.GenerateSubscriptionToken`) after checking the
+user is a participant. Token-gated channels are never client-publishable.
+
+### In-app message payload
+
+`InAppDispatcher` sends everything the client needs to render without a
+follow-up API call:
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `id` | string | Matches the stored notification; used to dedupe on reconnect |
+| `event_type` | string | The identity |
+| `title`, `body` | string | Render directly |
+| `link` | string | Deep-link target; omitted when empty |
+| `unread_count` | int | The recipient's unread total after this notification |
+| `created_at` | RFC3339 | |
+
+Plus every key from `do[0].data`. `device_tokens` is stripped — it is a push
+delivery detail and never reaches a client. Broadcast messages (challenge
+channels) carry no `id`, `unread_count` or `created_at`, since they are not
+per-recipient.
 
 ---
 
@@ -254,15 +316,19 @@ type ExtraData struct {
     OldData map[string]any `json:"old_data,omitempty"`
 }
 
-// pkg/contract/identity.go
+// pkg/contract/identity.go — see the file for the full lingocast set
 const (
     ContentPublished = "content_published"
     CommentCreated   = "comment_created"
+    VideoReady       = "video_ready"
+    // …
 )
 
 // pkg/contract/channels.go
 var IdentityChannels = map[string][]string{
     ContentPublished: {ChannelInApp, ChannelPush},
-    CommentCreated:   {ChannelInApp, ChannelPush},
+    VideoProgress:    {ChannelInApp},
+    StreakAtRisk:     {ChannelPush},
+    // …
 }
 ```

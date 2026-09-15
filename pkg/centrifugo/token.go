@@ -40,3 +40,28 @@ func GenerateSubscriptionToken(secret string, userID string, channel string, ttl
 	}
 	return signed, nil
 }
+
+// ParseSubscriptionToken verifies a channel subscription token and returns the
+// subject and channel it was minted for. Callers must check both against the
+// request — a valid token for a different channel or user must not grant access.
+func ParseSubscriptionToken(secret, tokenStr string) (sub, channel string, err error) {
+	token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, jwt.ErrSignatureInvalid
+		}
+		return []byte(secret), nil
+	})
+	if err != nil {
+		return "", "", err
+	}
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok || !token.Valid {
+		return "", "", jwt.ErrSignatureInvalid
+	}
+	sub, _ = claims["sub"].(string)
+	channel, _ = claims["channel"].(string)
+	if sub == "" || channel == "" {
+		return "", "", fmt.Errorf("centrifugo: subscription token missing sub or channel")
+	}
+	return sub, channel, nil
+}

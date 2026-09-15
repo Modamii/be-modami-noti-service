@@ -11,7 +11,7 @@
   "redis_address": "redis:6379",
   "redis_password": "${REDIS_PASSWORD}",
 
-  "allowed_origins": ["https://app.modami.com"],
+  "allowed_origins": ["https://app.modami.com", "https://app.lingocast.com"],
   "client_channel_limit": 128,
   "log_level": "info",
 

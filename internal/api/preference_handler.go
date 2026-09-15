@@ -34,9 +34,8 @@ func (h *PreferenceHandler) RegisterRoutes(mux *http.ServeMux) {
 // @Failure 500 {object} response.Response
 // @Router /users/{userId}/preferences [get]
 func (h *PreferenceHandler) Get(w http.ResponseWriter, r *http.Request) {
-	userID := r.PathValue("userId")
-	if userID == "" {
-		response.BadRequest(w, "missing userId")
+	userID, ok := callerID(w, r)
+	if !ok {
 		return
 	}
 	pref, err := h.store.Get(r.Context(), userID)
@@ -59,9 +58,8 @@ func (h *PreferenceHandler) Get(w http.ResponseWriter, r *http.Request) {
 // @Failure 500 {object} response.Response
 // @Router /users/{userId}/preferences [put]
 func (h *PreferenceHandler) Set(w http.ResponseWriter, r *http.Request) {
-	userID := r.PathValue("userId")
-	if userID == "" {
-		response.BadRequest(w, "missing userId")
+	userID, ok := callerID(w, r)
+	if !ok {
 		return
 	}
 	var pref domain.Preference

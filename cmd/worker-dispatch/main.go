@@ -16,6 +16,7 @@ import (
 	"be-modami-no-service/pkg/centrifugo"
 	"be-modami-no-service/pkg/event"
 	"be-modami-no-service/pkg/health"
+	"be-modami-no-service/pkg/metrics"
 
 	"github.com/redis/go-redis/v9"
 	"gitlab.com/lifegoeson-libs/pkg-logging/logger"
@@ -55,9 +56,22 @@ func main() {
 		health.NewRedisChecker(rdb),
 		health.NewCentrifugoChecker(cfgo),
 	)
+	reg := metrics.NewRegistry()
+	dispatched := reg.NewCounter("notif_dispatch_total", "WebSocket messages published to Centrifugo")
+	dispatchFailed := reg.NewCounter("notif_dispatch_failed_total", "WebSocket messages dropped after a publish failure")
+	// Queue depth is the earliest signal that this worker has stalled: if the
+	// consumer dies, the list grows while every other probe still looks healthy.
+	reg.RegisterGauge("notif_queue_depth", "Messages waiting in the Redis queue",
+		map[string]string{"queue": "ws"},
+		func() (float64, error) {
+			n, err := rdb.LLen(context.Background(), cfg.Queue.WSKey).Result()
+			return float64(n), err
+		})
+
 	healthMux := http.NewServeMux()
 	healthMux.HandleFunc("GET /healthz", checker.Healthz)
 	healthMux.HandleFunc("GET /readyz", checker.Readyz)
+	healthMux.HandleFunc("GET /metrics", reg.Handler())
 	healthSrv := &http.Server{Addr: ":7073", Handler: healthMux}
 	go func() {
 		if err := healthSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -84,9 +98,16 @@ func main() {
 		}
 
 		if err := cfgo.Publish(sigCtx, channel, payload); err != nil {
-			l.Error("centrifugo publish failed", err)
-			return err
+			// Returning an error here would end the consume loop, taking the
+			// whole worker down for one bad publish. The message is already off
+			// the queue, so log it in full and keep draining.
+			// ponytail: message is lost on failure; add a retry queue if the
+			// dropped-dispatch counter ever moves in production.
+			dispatchFailed.Inc()
+			l.Error("centrifugo publish failed, message dropped: channel="+channel+" event="+msg.Event, err)
+			return nil
 		}
+		dispatched.Inc()
 		return nil
 	})
 	if err != nil && err != context.Canceled {

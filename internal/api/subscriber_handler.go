@@ -36,9 +36,8 @@ func (h *SubscriberHandler) RegisterRoutes(mux *http.ServeMux) {
 // @Failure 500 {object} response.Response
 // @Router /users/{userId}/subscribers [post]
 func (h *SubscriberHandler) Register(w http.ResponseWriter, r *http.Request) {
-	userID := r.PathValue("userId")
-	if userID == "" {
-		response.BadRequest(w, "missing userId")
+	userID, ok := callerID(w, r)
+	if !ok {
 		return
 	}
 	var sub domain.Subscriber
@@ -65,10 +64,13 @@ func (h *SubscriberHandler) Register(w http.ResponseWriter, r *http.Request) {
 // @Failure 500 {object} response.Response
 // @Router /users/{userId}/subscribers/{token} [delete]
 func (h *SubscriberHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	userID := r.PathValue("userId")
+	userID, ok := callerID(w, r)
+	if !ok {
+		return
+	}
 	token := r.PathValue("token")
-	if userID == "" || token == "" {
-		response.BadRequest(w, "missing userId or token")
+	if token == "" {
+		response.BadRequest(w, "missing token")
 		return
 	}
 	if err := h.store.DeleteByToken(r.Context(), userID, token); err != nil {

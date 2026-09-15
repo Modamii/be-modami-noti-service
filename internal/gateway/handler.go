@@ -3,7 +3,6 @@ package gateway
 import (
 	"encoding/json"
 	"net/http"
-	"strings"
 	"time"
 
 	"be-modami-no-service/pkg/centrifugo"
@@ -16,12 +15,14 @@ import (
 // The "chat" namespace is proxied to the chat service's own ws-gateway.
 type ProxyHandler struct {
 	hmacSecret     string
+	policy         *ChannelPolicy
 	publishLimiter *RateLimiter
 }
 
 func NewProxyHandler(hmacSecret string) *ProxyHandler {
 	return &ProxyHandler{
 		hmacSecret: hmacSecret,
+		policy:     NewChannelPolicy(hmacSecret),
 		// 10 publishes per second, burst of 20 per user
 		publishLimiter: NewRateLimiter(10, 20, time.Second),
 	}
@@ -93,7 +94,7 @@ func (h *ProxyHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !isNotiChannelAllowed(req.User, req.Channel) {
+	if !h.policy.Allow(req.User, req.Channel, req.Token) {
 		writeProxyError(w, centrifugo.ProxyErrorForbidden, "not allowed to subscribe to this channel")
 		return
 	}
@@ -115,25 +116,14 @@ func (h *ProxyHandler) Publish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !isNotiChannelAllowed(req.User, req.Channel) {
+	// Publish carries no subscription token, so token-gated channels are never
+	// client-publishable — notifications on them are server-initiated only.
+	if !h.policy.Allow(req.User, req.Channel, "") {
 		writeProxyError(w, centrifugo.ProxyErrorForbidden, "not allowed to publish to this channel")
 		return
 	}
 
 	writeProxyResult(w, &centrifugo.ProxyPublishResult{})
-}
-
-// isNotiChannelAllowed checks noti namespace access rules:
-//   - "noti:user:{userID}"  — only the owner
-//   - "noti:topic:*"        — public broadcast channels
-func isNotiChannelAllowed(userID, channel string) bool {
-	if channel == centrifugo.NotiChannel(userID) {
-		return true
-	}
-	if strings.HasPrefix(channel, centrifugo.NamespaceNoti+":topic:") {
-		return true
-	}
-	return false
 }
 
 func (h *ProxyHandler) parseJWT(tokenStr string) (jwt.MapClaims, error) {
