@@ -38,7 +38,7 @@ redis:
   rate_limit_database: 5
   ttl: 259200s
   pool_size: 100
-  pass: ""
+  pass: "redis_password"  # matches the running redis container's --requirepass
   user_name: ""
   write_timeout: 600s
   read_timeout: 600s
@@ -71,7 +71,7 @@ servers:
   gateway_addr: ":7072"
 
 fcm:
-  credentials_path: ""
+  credentials_path: "config/firebase-credentials.json"
 
 centrifugo:
   api_url: "http://localhost:8000/api"
