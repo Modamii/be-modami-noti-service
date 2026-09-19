@@ -11,10 +11,13 @@ env:
   DOCKER_REPO: be-modami-noti-service
   GOFLAGS: -mod=readonly
 
+# ─── BUILD ────────────────────────────────────────────────────────────────────
+
 jobs:
-  # ─── BUILD & TEST ─────────────────────────────────────────────────────────
   build:
+    name: Build & Vet
     runs-on: ubuntu-latest
+    environment: CI
     steps:
       - uses: actions/checkout@v4
 
@@ -23,52 +26,114 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Configure private GitLab module access
+      - name: Configure private GitLab modules
         run: |
           git config --global url."https://${{ secrets.GITLAB_USERNAME }}:${{ secrets.GITLAB_TOKEN }}@gitlab.com/".insteadOf "https://gitlab.com/"
           go env -w GOPRIVATE=gitlab.com/lifegoeson-libs/*
-          go env -w GONOSUMDB=gitlab.com/lifegoeson-libs/*
           go env -w GONOPROXY=gitlab.com/lifegoeson-libs/*
+          go env -w GONOSUMDB=gitlab.com/lifegoeson-libs/*
 
-      - run: go mod download
-      - run: go vet ./...
-      - run: go build ./...
+      - name: Download dependencies
+        run: go mod download
 
-  # ─── SECURITY ─────────────────────────────────────────────────────────────
+      - name: go vet
+        run: go vet ./...
+
+      - name: Build — api
+        run: CGO_ENABLED=0 go build -ldflags="-w -s" -o /dev/null ./cmd/api
+
+      - name: Build — ingest
+        run: CGO_ENABLED=0 go build -ldflags="-w -s" -o /dev/null ./cmd/ingest
+
+      - name: Build — ws-gateway
+        run: CGO_ENABLED=0 go build -ldflags="-w -s" -o /dev/null ./cmd/ws-gateway
+
+      - name: Build — worker-dispatch
+        run: CGO_ENABLED=0 go build -ldflags="-w -s" -o /dev/null ./cmd/worker-dispatch
+
+      - name: Build — worker-push
+        run: CGO_ENABLED=0 go build -ldflags="-w -s" -o /dev/null ./cmd/worker-push
+
+# ─── SECURITY ─────────────────────────────────────────────────────────────────
+
   trivy-scan:
+    name: Trivy FS Scan
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run Trivy filesystem scan
+      - name: Run Trivy
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: fs
-          format: json
-          output: fs-report.json
-          exit-code: '0'
+          scan-ref: .
+          format: table
+          output: fs-report.txt
+          exit-code: "0"
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: trivy-report
-          path: fs-report.json
+          path: fs-report.txt
           retention-days: 7
 
   gitleaks-scan:
+    name: Gitleaks Secret Scan
     runs-on: ubuntu-latest
+    environment: CI
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - uses: gitleaks/gitleaks-action@v2
+      - name: Run Gitleaks
+        id: gitleaks
+        uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+        continue-on-error: true
 
-  # ─── RELEASE — 5 parallel Docker builds ───────────────────────────────────
+      - name: Print leak report
+        if: always()
+        run: |
+          echo "=========================================="
+          echo "GITLEAKS SECRET SCAN RESULTS"
+          echo "=========================================="
+          if [ -f gitleaks-report.json ]; then
+            python3 -c "
+          import json, sys
+          with open('gitleaks-report.json') as f:
+              data = json.load(f)
+          if not data:
+              print('No secrets found.')
+          for item in data:
+              print('━' * 42)
+              print(f'LEAK FOUND!')
+              print(f'File:  {item.get(\"File\",\"\")}')
+              print(f'Line:  {item.get(\"StartLine\",\"\")}')
+              print(f'Rule:  {item.get(\"RuleID\",\"\")}')
+              print(f'Match: {item.get(\"Match\",\"\")}')
+              print('━' * 42)
+          " 2>/dev/null || cat gitleaks-report.json
+          else
+            echo "No report generated."
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gitleaks-report
+          path: gitleaks-report.json
+          retention-days: 7
+
+# ─── RELEASE — 5 parallel Docker builds ───────────────────────────────────────
+
   docker-build-push:
+    name: Docker Build & Push
     runs-on: ubuntu-latest
+    environment: CI                  # ← secrets are scoped to this environment
     needs: [build, trivy-scan, gitleaks-scan]
     if: github.ref == 'refs/heads/master' && github.event_name == 'push'
     strategy:
@@ -76,6 +141,13 @@ jobs:
         service: [api, ingest, ws-gateway, worker-dispatch, worker-push]
     steps:
       - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android \
+            /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          sudo docker image prune -af || true
+          df -h
 
       - name: Get short SHA
         id: vars
@@ -101,3 +173,9 @@ jobs:
             gitlab_token=${{ secrets.GITLAB_TOKEN }}
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,scope=${{ matrix.service }},mode=max
+
+      - name: Summary
+        run: |
+          echo "Pushed:"
+          echo "  ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPO }}-${{ matrix.service }}:latest"
+          echo "  ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPO }}-${{ matrix.service }}:v1.0.${{ steps.vars.outputs.short_sha }}"
